@@ -1,0 +1,359 @@
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+  getDoc
+} from "firebase/firestore"
+import { getDb } from "./firestore"
+import type { Product } from "@/lib/types"
+
+export async function getProducts(): Promise<Product[]> {
+  try {
+    console.log("🔥 Firebase: Conectando ao Firestore...")
+    const db = getDb()
+
+    console.log("📋 Firebase: Acessando coleção 'products'...")
+    const productsRef = collection(db, "products")
+
+    console.log("🔍 Firebase: Criando query...")
+    const productsQuery = query(productsRef, orderBy("createdAt", "desc"))
+
+    console.log("📡 Firebase: Executando query...")
+    const snapshot = await getDocs(productsQuery)
+
+    console.log("📊 Firebase: Documentos encontrados:", snapshot.size)
+
+    if (snapshot.empty) {
+      console.log("⚠️ Firebase: Nenhum produto encontrado na coleção")
+      return []
+    }
+
+    const products = snapshot.docs.map(doc => {
+      const data = doc.data()
+      console.log("📄 Firebase: Produto encontrado:", doc.id, data.title || "Sem título")
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      }
+    }) as Product[]
+
+    console.log("✅ Firebase: Total de produtos processados:", products.length)
+    return products
+  } catch (error) {
+    console.error("❌ Firebase: Erro ao buscar produtos:", error)
+    console.error("🔍 Firebase: Tipo do erro:", (error as any).code)
+    console.error("📝 Firebase: Mensagem:", (error as Error).message)
+
+    // Handle specific Firebase errors
+    if ((error as any).code === 'permission-denied' || (error as Error).message?.includes('permission')) {
+      try {
+        console.log("🔄 Firebase: Tentando busca simples sem orderBy...")
+        const db = getDb()
+        const productsRef = collection(db, "products")
+        const snapshot = await getDocs(productsRef)
+
+        console.log("📊 Firebase: Documentos encontrados (sem orderBy):", snapshot.size)
+
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        })) as Product[]
+      } catch (retryError) {
+        console.error("❌ Firebase: Erro na segunda tentativa:", retryError)
+        return []
+      }
+    }
+
+    return []
+  }
+}
+
+
+
+export async function getProductById(id: string): Promise<Product | null> {
+  try {
+    const db = getDb()
+    const productRef = doc(db, "products", id)
+    const snapshot = await getDoc(productRef)
+
+    if (!snapshot.exists()) {
+      return null
+    }
+
+    return {
+      id: snapshot.id,
+      ...snapshot.data(),
+      createdAt: snapshot.data().createdAt?.toDate() || new Date(),
+      updatedAt: snapshot.data().updatedAt?.toDate() || new Date(),
+    } as Product
+  } catch (error) {
+    console.error("Erro ao buscar produto:", error)
+    return null
+  }
+}
+
+export async function getProductsByCategory(category: string): Promise<Product[]> {
+  try {
+    const db = getDb()
+    const productsRef = collection(db, "products")
+    const categoryQuery = query(
+      productsRef,
+      where("category", "==", category),
+      orderBy("createdAt", "desc")
+    )
+
+    const snapshot = await getDocs(categoryQuery)
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+    })) as Product[]
+  } catch (error) {
+    console.error(`Erro ao buscar produtos da categoria ${category}:`, error)
+    return []
+  }
+}
+
+export async function getFeaturedProducts(): Promise<Product[]> {
+  try {
+    const db = getDb()
+    const productsRef = collection(db, "products")
+    const featuredQuery = query(
+      productsRef,
+      where("featured", "==", true),
+      orderBy("createdAt", "desc")
+    )
+
+    const snapshot = await getDocs(featuredQuery)
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate() || new Date(),
+      updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+    })) as Product[]
+  } catch (error) {
+    console.error("Erro ao buscar produtos em destaque:", error)
+    return []
+  }
+}
+
+export async function addProduct(product: Omit<Product, "id">): Promise<string | null> {
+  try {
+    const db = getDb()
+    const productsRef = collection(db, "products")
+
+    const productData = {
+      ...product,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    }
+
+    const docRef = await addDoc(productsRef, productData)
+    return docRef.id
+  } catch (error) {
+    console.error("Erro ao adicionar produto:", error)
+    return null
+  }
+}
+
+export async function updateProduct(id: string, updates: Partial<Product>): Promise<boolean> {
+  try {
+    console.log("🔄 Tentando atualizar produto:", id, "com dados:", updates)
+    
+    const db = getDb()
+    const productRef = doc(db, "products", id)
+
+    // Filtrar campos undefined para evitar erro do Firebase
+    const cleanUpdates: any = {}
+    Object.keys(updates).forEach(key => {
+      const value = (updates as any)[key]
+      if (value !== undefined) {
+        cleanUpdates[key] = value
+      }
+    })
+
+    const updateData = {
+      ...cleanUpdates,
+      updatedAt: Timestamp.now(),
+    }
+
+    console.log("📝 Dados para atualização:", updateData)
+    
+    await updateDoc(productRef, updateData)
+    console.log("✅ Produto atualizado com sucesso:", id)
+    return true
+  } catch (error) {
+    console.error("❌ Erro ao atualizar produto:", error)
+    console.error("🔍 Tipo do erro:", (error as any).code)
+    console.error("📝 Mensagem:", (error as Error).message)
+    
+    if ((error as any).code === 'permission-denied') {
+      console.log("🔄 Erro de permissão detectado")
+      console.log("📋 Verifique se as regras do Firestore permitem atualização de produtos para admins")
+    }
+    
+    return false
+  }
+}
+
+export async function deleteProduct(id: string): Promise<boolean> {
+  try {
+    const db = getDb()
+    const productRef = doc(db, "products", id)
+    await deleteDoc(productRef)
+    return true
+  } catch (error) {
+    console.error("Erro ao excluir produto:", error)
+    return false
+  }
+}
+
+// Funções para categorias e tamanhos
+export async function getCategories(): Promise<string[]> {
+  try {
+    const db = getDb()
+    const categoriesRef = collection(db, "categories")
+    const snapshot = await getDocs(categoriesRef)
+
+    if (snapshot.empty) {
+      // Return default categories based on script/prod.js
+      return [
+        "trabalhista", 
+        "provas", 
+        "sucessorio", 
+        "parecer", 
+        "contratos", 
+        "gravames", 
+        "corporate", 
+        "empresarial", 
+        "civil", 
+        "documentos", 
+        "processual", 
+        "societario", 
+        "representacao", 
+        "direitos", 
+        "administrativo"
+      ]
+    }
+
+    return snapshot.docs.map(doc => doc.data().name)
+  } catch (error) {
+    console.error("Erro ao buscar categorias:", error)
+    return [
+      "trabalhista", 
+      "provas", 
+      "sucessorio", 
+      "parecer", 
+      "contratos", 
+      "gravames", 
+      "corporate", 
+      "empresarial", 
+      "civil", 
+      "documentos", 
+      "processual", 
+      "societario", 
+      "representacao", 
+      "direitos", 
+      "administrativo"
+    ]
+  }
+}
+
+export async function getSizes(): Promise<string[]> {
+  try {
+    const db = getDb()
+    const sizesRef = collection(db, "sizes")
+    const snapshot = await getDocs(sizesRef)
+
+    if (snapshot.empty) {
+      return ["Único", "Básico", "Completo", "Premium", "Consultoria", "Assessoria"]
+    }
+
+    return snapshot.docs.map(doc => doc.data().name)
+  } catch (error) {
+    console.error("Erro ao buscar tamanhos:", error)
+    return ["Único", "Básico", "Completo", "Premium", "Consultoria", "Assessoria"]
+  }
+}
+
+export async function createProduct(product: Omit<Product, "id">): Promise<string | null> {
+  return addProduct(product)
+}
+
+export async function createProductAsAdmin(product: Omit<Product, "id">): Promise<string | null> {
+  try {
+    console.log("🔐 Criando produto como admin:", product.title)
+    
+    // Usar a função addProduct que já existe
+    const productId = await addProduct(product)
+    
+    if (productId) {
+      console.log("✅ Produto criado com sucesso como admin:", productId)
+      return productId
+    }
+    
+    return null
+  } catch (error) {
+    console.error("❌ Erro ao criar produto como admin:", error)
+    return null
+  }
+}
+
+export async function createCategory(name: string): Promise<boolean> {
+  try {
+    const db = getDb()
+    const categoriesRef = collection(db, "categories")
+    await addDoc(categoriesRef, { name })
+    return true
+  } catch (error) {
+    console.error("Erro ao criar categoria:", error)
+    return false
+  }
+}
+
+export async function createSize(name: string): Promise<boolean> {
+  try {
+    const db = getDb()
+    const sizesRef = collection(db, "sizes")
+    await addDoc(sizesRef, { name })
+    return true
+  } catch (error) {
+    console.error("Erro ao criar tamanho:", error)
+    return false
+  }
+}
+
+export async function getProduct(id: string): Promise<Product | null> {
+  try {
+    const db = getDb()
+    const productRef = doc(db, "products", id)
+    const productSnap = await getDoc(productRef)
+
+    if (productSnap.exists()) {
+      const data = productSnap.data()
+      return {
+        id: productSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      } as Product
+    }
+
+    return null
+  } catch (error) {
+    console.error("Erro ao buscar produto:", error)
+    return null
+  }
+}

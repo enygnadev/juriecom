@@ -1,0 +1,48 @@
+import { Inter } from 'next/font/google'
+import './globals.css'
+import { Providers } from '@/components/providers/providers'
+import { Toaster } from '@/components/ui/toaster'
+import type { Metadata } from "next"
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: "Juridico Ecommerce - Serviços Jurídicos Digitais",
+  description: "Simplifique seus processos jurídicos com o Juridico Ecommerce. Documentação, licenciamentos e serviços jurídicos com agilidade e segurança.",
+  keywords: ["juridico", "serviços jurídicos", "documentação", "licenciamento", "CNH", "veículos", "empresas"],
+  authors: [{ name: "Juridico Ecommerce" }],
+  creator: "Juridico Ecommerce",
+  publisher: "Juridico Ecommerce",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+}
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className={inter.className}>
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
+      </body>
+    </html>
+  )
+}
