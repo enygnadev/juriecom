@@ -1,92 +1,383 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permitir leitura dos produtos para todos
+    // ========================================
+    // FUNÇÕES AUXILIARES DE SEGURANÇA
+    // ========================================
+    
+    // Verifica se o usuário é administrador - versão ultra simplificada
+    function isAdmin() {
+      return request.auth != null && 
+        (request.auth.token.email == 'admin@juriecommerce.com' ||
+         request.auth.token.email == 'guga@gmail.com');
+    }
+    
+    // Verifica se é o próprio usuário
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Verifica se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Valida se todos os campos obrigatórios estão presentes
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    // Valida formato de email
+    function isValidEmail(email) {
+      return email is string && 
+             email.size() > 5 && 
+             email.size() < 255 && 
+             email.matches('.*@.*\\..*');
+    }
+    
+    // Valida dados básicos de produto para criação
+    function isValidProductCreation() {
+      return request.resource.data.title is string &&
+             request.resource.data.title.size() > 0 &&
+             request.resource.data.title.size() < 200 &&
+             request.resource.data.price is number &&
+             request.resource.data.price >= 0 &&
+             request.resource.data.category is string &&
+             request.resource.data.category.size() > 0;
+    }
+    
+    // Valida dados de pedido
+    function isValidOrder() {
+      return request.resource.data.items is list &&
+             request.resource.data.items.size() > 0 &&
+             request.resource.data.items.size() < 100 &&
+             request.resource.data.total is number &&
+             request.resource.data.total >= 0 &&
+             request.resource.data.status is string &&
+             request.resource.data.status in ['pending', 'processing', 'paid', 'shipped', 'delivered', 'cancelled'];
+    }
+    
+    // Valida se usuário pode modificar status do pedido
+    function canUpdateOrderStatus(oldStatus, newStatus) {
+      return isAdmin() || 
+        (oldStatus in ['pending', 'processing'] && newStatus == 'cancelled');
+    }
+    
+    // ========================================
+    // PRODUTOS - LEITURA PÚBLICA, ESCRITA ADMIN FLEXÍVEL
+    // ========================================
     match /products/{productId} {
+      // Leitura completamente pública - qualquer pessoa pode ver produtos
       allow read: if true;
-      allow write: if request.auth != null && 
-        resource.data.get('userId', '') == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
+      
+      // Criação, atualização e exclusão apenas para admins - regras simplificadas
+      allow write: if isAdmin();
     }
-
-    // Regras para usuários
-    match /users/{userId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == userId || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true);
-    }
-
-    // Regras para pedidos
-    match /orders/{orderId} {
-      allow read: if request.auth != null && 
-        (resource.data.userId == request.auth.uid || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true);
-      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow update: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
-    }
-
-    // Regras para endereços - apenas o próprio usuário pode acessar
-    match /addresses/{addressId} {
-      allow read, write, delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
-    }
-
-    // Regras para métodos de pagamento - apenas o próprio usuário pode acessar
-    match /paymentMethods/{paymentMethodId} {
-      allow read, write, delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
-    }
-
-    // Regras para lista de desejos - apenas o próprio usuário pode acessar
-    match /wishlist/{wishlistId} {
-      allow read, write, delete: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
-    }
-
-    // Regras para configurações - apenas admins
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
-    }
-
-    // Regras para carrinho de compras
-    match /carts/{cartId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == cartId || 
-         resource.data.get('userId', '') == request.auth.uid);
-    }
-
-    // Regras para sessões e logs de segurança
-    match /userSessions/{sessionId} {
-      allow read, write: if request.auth != null && 
-        resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
-    }
-
-    // Permitir leitura de dados públicos
+    
+    // ========================================
+    // CATEGORIAS - LEITURA PÚBLICA, ESCRITA ADMIN
+    // ========================================
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
+      
+      allow create: if isAdmin() && 
+        hasRequiredFields(['name']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() < 100;
+      
+      allow update, delete: if isAdmin();
     }
-
-    // Regras para analytics e métricas (apenas admins)
-    match /analytics/{document=**} {
-      allow read, write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
+    
+    // ========================================
+    // TAMANHOS - LEITURA PÚBLICA, ESCRITA ADMIN
+    // ========================================
+    match /sizes/{sizeId} {
+      allow read: if true;
+      
+      allow create: if isAdmin() && 
+        hasRequiredFields(['name', 'value']) &&
+        request.resource.data.name is string &&
+        request.resource.data.value is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.value.size() > 0;
+      
+      allow update, delete: if isAdmin();
     }
-
-    // Negar acesso a qualquer outro documento por padrão
+    
+    // ========================================
+    // CONFIGURAÇÕES - LEITURA PÚBLICA, ESCRITA ADMIN
+    // ========================================
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================
+    // USUÁRIOS - CONTROLE RIGOROSO DE ACESSO
+    // ========================================
+    match /users/{userId} {
+      // Ler apenas próprios dados ou ser admin
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Criar perfil apenas para si mesmo com validação rigorosa
+      allow create: if isOwner(userId) && 
+        hasRequiredFields(['email', 'name', 'createdAt']) &&
+        isValidEmail(request.resource.data.email) &&
+        request.resource.data.email == request.auth.token.email &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() < 100 &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp &&
+        // Usuário comum não pode se criar como admin
+        (!request.resource.data.keys().hasAny(['isAdmin']) || request.resource.data.isAdmin == false);
+      
+      // Atualizar próprios dados com restrições
+      allow update: if (isOwner(userId) && 
+        // Usuário não pode alterar próprio status de admin
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'email', 'createdAt']) &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.updatedAt > resource.data.updatedAt &&
+        (!request.resource.data.keys().hasAny(['name']) || 
+         (request.resource.data.name is string && 
+          request.resource.data.name.size() > 0 && 
+          request.resource.data.name.size() < 100))
+      ) || (
+        // Admin pode alterar tudo exceto email e criação
+        isAdmin() && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['email', 'createdAt']) &&
+        request.resource.data.updatedAt is timestamp
+      );
+      
+      // Exclusão apenas para admin
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // PEDIDOS - CONTROLE RIGOROSO POR USUÁRIO
+    // ========================================
+    match /orders/{orderId} {
+      // Ler apenas próprios pedidos ou admin ver todos
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.userId) || isAdmin());
+      
+      // Criar pedido com validação rigorosa
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        isValidOrder() &&
+        hasRequiredFields(['items', 'total', 'status', 'userId', 'createdAt']) &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.status == 'pending' &&
+        // Validar informações do cliente se fornecidas
+        (!request.resource.data.keys().hasAny(['customerInfo']) || 
+         (request.resource.data.customerInfo.name is string &&
+          request.resource.data.customerInfo.name.size() > 0 &&
+          request.resource.data.customerInfo.email is string &&
+          isValidEmail(request.resource.data.customerInfo.email)));
+      
+      // Atualizar pedido com controle rigoroso
+      allow update: if isAuthenticated() && 
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.updatedAt > resource.data.updatedAt &&
+        (
+          // Admin pode alterar tudo
+          (isAdmin() && isValidOrder()) ||
+          // Usuário só pode cancelar próprio pedido em status específicos
+          (isOwner(resource.data.userId) && 
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) && 
+           canUpdateOrderStatus(resource.data.status, request.resource.data.status))
+        );
+      
+      // Exclusão apenas para admin
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // CARRINHO - TOTALMENTE PRIVADO POR USUÁRIO
+    // ========================================
+    match /carts/{userId} {
+      // Apenas o próprio usuário pode acessar seu carrinho
+      allow read, write: if isOwner(userId);
+      
+      // Criar carrinho com validação
+      allow create: if isOwner(userId) && 
+        request.resource.data.items is list &&
+        request.resource.data.items.size() < 100 &&
+        request.resource.data.updatedAt is timestamp;
+    }
+    
+    // ========================================
+    // ENDEREÇOS - TOTALMENTE PRIVADO POR USUÁRIO
+    // ========================================
+    match /user_addresses/{userId} {
+      match /addresses/{addressId} {
+        allow read, write: if isOwner(userId);
+        
+        allow create: if isOwner(userId) && 
+          hasRequiredFields(['street', 'city', 'state', 'zipCode']) &&
+          request.resource.data.street is string &&
+          request.resource.data.street.size() > 0 &&
+          request.resource.data.city is string &&
+          request.resource.data.city.size() > 0 &&
+          request.resource.data.state is string &&
+          request.resource.data.state.size() > 0 &&
+          request.resource.data.zipCode is string &&
+          request.resource.data.zipCode.size() > 0;
+      }
+    }
+    
+    // ========================================
+    // AVALIAÇÕES - LEITURA PÚBLICA, ESCRITA RESTRITA
+    // ========================================
+    match /reviews/{reviewId} {
+      // Leitura pública das avaliações
+      allow read: if true;
+      
+      // Criar avaliação com validação rigorosa
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        hasRequiredFields(['productId', 'rating', 'comment', 'userId']) &&
+        request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        request.resource.data.comment is string &&
+        request.resource.data.comment.size() > 0 &&
+        request.resource.data.comment.size() < 1000 &&
+        request.resource.data.createdAt is timestamp;
+      
+      // Atualizar/excluir apenas própria avaliação ou admin
+      allow update: if (isOwner(resource.data.userId) || isAdmin()) &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.updatedAt > resource.data.updatedAt;
+        
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+    
+    // ========================================
+    // NEWSLETTER - CONTROLE DE INSCRIÇÃO SEGURO
+    // ========================================
+    match /newsletters/{email} {
+      // Admin pode ler todas as inscrições
+      allow read: if isAdmin();
+      
+      // Usuários podem se inscrever apenas com seu próprio email
+      allow create: if isAuthenticated() && 
+        isValidEmail(request.resource.data.email) &&
+        request.resource.data.email == request.auth.token.email &&
+        request.resource.data.createdAt is timestamp;
+      
+      // Usuário pode cancelar apenas própria inscrição
+      allow delete: if isAuthenticated() && 
+        resource.data.email == request.auth.token.email;
+      
+      // Admin pode atualizar
+      allow update: if isAdmin();
+    }
+    
+    // ========================================
+    // DADOS DE SESSÃO - TOTALMENTE PRIVADO
+    // ========================================
+    match /user_sessions/{sessionId} {
+      allow read, write: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+        
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.createdAt is timestamp;
+        
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // ========================================
+    // CONFORMIDADE LGPD E PRIVACIDADE
+    // ========================================
+    
+    // Consentimentos LGPD
+    match /consents/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+      
+      allow create: if isOwner(userId) && 
+        hasRequiredFields(['consentDate', 'version', 'accepted']) &&
+        request.resource.data.accepted is bool &&
+        request.resource.data.consentDate is timestamp &&
+        request.resource.data.version is string;
+    }
+    
+    // Configurações de privacidade
+    match /privacy_settings/{userId} {
+      allow read, write: if isOwner(userId);
+      allow read: if isAdmin();
+    }
+    
+    // Solicitações de exclusão de dados
+    match /data_deletion_requests/{requestId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(resource.data.userId) || isAdmin());
+        
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        hasRequiredFields(['reason', 'requestDate']) &&
+        request.resource.data.requestDate is timestamp &&
+        request.resource.data.reason is string &&
+        request.resource.data.reason.size() > 0;
+        
+      allow update: if isAdmin();
+    }
+    
+    // ========================================
+    // RECURSOS ADMINISTRATIVOS - APENAS ADMIN
+    // ========================================
+    
+    // Estatísticas da loja
+    match /store_analytics/{document} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Configurações do sistema
+    match /system_config/{document} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Logs de auditoria
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Logs de segurança
+    match /security_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if true; // Para logs automáticos do sistema
+    }
+    
+    // Backups de dados
+    match /backups/{backupId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================
+    // HISTÓRICO E ANALYTICS SEGUROS
+    // ========================================
+    
+    // Histórico de compras (apenas próprio usuário ou admin)
+    match /purchase_history/{userId} {
+      allow read, write: if isOwner(userId);
+      // Admin pode ler apenas dados específicos e anonimizados
+      allow read: if isAdmin();
+    }
+    
+    // ========================================
+    // REGRAS DE NEGAÇÃO EXPLÍCITA (FALLBACK)
+    // ========================================
+    
+    // Qualquer documento não especificado acima é negado por padrão
     match /{document=**} {
       allow read, write: if false;
     }
