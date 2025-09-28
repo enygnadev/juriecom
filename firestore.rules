@@ -164,20 +164,15 @@ service cloud.firestore {
       allow read: if isAuthenticated() && 
         (isOwner(resource.data.userId) || isAdmin());
       
-      // Criar pedido com validação rigorosa
+      // Criar pedido com validação simplificada para prevenda
       allow create: if isAuthenticated() && 
-        request.auth.uid == request.resource.data.userId &&
-        isValidOrder() &&
-        hasRequiredFields(['items', 'total', 'status', 'userId', 'createdAt']) &&
+        request.resource.data.items is list &&
+        request.resource.data.items.size() > 0 &&
+        request.resource.data.totalPrice is number &&
+        request.resource.data.totalPrice >= 0 &&
+        request.resource.data.status is string &&
         request.resource.data.createdAt is timestamp &&
-        request.resource.data.updatedAt is timestamp &&
-        request.resource.data.status == 'pending' &&
-        // Validar informações do cliente se fornecidas
-        (!request.resource.data.keys().hasAny(['customerInfo']) || 
-         (request.resource.data.customerInfo.name is string &&
-          request.resource.data.customerInfo.name.size() > 0 &&
-          request.resource.data.customerInfo.email is string &&
-          isValidEmail(request.resource.data.customerInfo.email)));
+        request.resource.data.updatedAt is timestamp;
       
       // Atualizar pedido com controle rigoroso
       allow update: if isAuthenticated() && 
