@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -38,12 +37,12 @@ export function Checkout() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')
-  
+
   const [loading, setLoading] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
   const [orderItems, setOrderItems] = useState<any[]>([])
   const [orderTotal, setOrderTotal] = useState(0)
-  
+
   const [checkoutData, setCheckoutData] = useState<CheckoutData>({
     name: user?.displayName || "",
     email: user?.email || "",
@@ -66,7 +65,7 @@ export function Checkout() {
           const db = getDb()
           const orderRef = doc(db, 'orders', orderId)
           const orderSnap = await getDoc(orderRef)
-          
+
           if (orderSnap.exists()) {
             const order = orderSnap.data()
             setOrderData(order)
@@ -126,7 +125,7 @@ export function Checkout() {
 
   const shippingFee = 15.90
   const freeShippingMinValue = 199.90
-  
+
   // Usar dados do pedido ou carrinho
   const itemsToUse = orderId ? orderItems : cartItems
   const subtotal = orderId ? orderTotal : getTotalPrice()
@@ -206,11 +205,11 @@ export function Checkout() {
     try {
       const db = getDb()
       const orderRef = doc(db, 'orders', orderId)
-      
+
       await getDoc(orderRef).then(async (docSnap) => {
         if (docSnap.exists()) {
           const currentData = docSnap.data()
-          
+
           const updatedData = {
             ...currentData,
             customerInfo: {
@@ -229,10 +228,10 @@ export function Checkout() {
 
           // Atualizar o documento
           await updateOrderStatus(orderId, "pending_payment")
-          
+
           console.log("Pedido atualizado com informações do cliente")
           toast.success("Pedido atualizado com sucesso!")
-          
+
           if (paymentMethod === "pix") {
             window.location.href = "/pedido-confirmado"
           }
@@ -261,7 +260,8 @@ export function Checkout() {
         image: item.image
       }))
 
-      const order = {
+      // Criar o pedido
+      const orderData = {
         userId: user.uid,
         items: orderItems,
         total,
@@ -281,7 +281,14 @@ export function Checkout() {
         updatedAt: new Date()
       }
 
-      await createOrder(order)
+      console.log("📝 Dados do pedido antes de criar:", {
+        userId: orderData.userId,
+        total: orderData.total,
+        itemsCount: orderData.items.length,
+        status: orderData.status
+      })
+
+      await createOrder(orderData)
       await clearCart()
 
       if (paymentMethod === "pix") {

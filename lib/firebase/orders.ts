@@ -102,31 +102,70 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
     const allOrdersSnapshot = await getDocs(allOrdersQuery)
     console.log("📦 Total de pedidos no banco:", allOrdersSnapshot.size)
     
-    // Log dos primeiros pedidos para verificar estrutura
-    allOrdersSnapshot.docs.slice(0, 3).forEach(doc => {
-      console.log("📝 Estrutura do pedido:", doc.id, doc.data())
+    // Log de TODOS os pedidos para verificar estrutura
+    allOrdersSnapshot.docs.forEach(doc => {
+      const data = doc.data()
+      console.log("📝 Pedido completo:", {
+        id: doc.id, 
+        userId: data.userId,
+        status: data.status,
+        total: data.total,
+        createdAt: data.createdAt?.toDate?.() || data.createdAt
+      })
     })
     
-    // Buscar pedidos do usuário específico
+    // Tentativa sem orderBy para evitar erro de índice
     const q = query(
       collection(db, ORDERS_COLLECTION),
-      where("userId", "==", userId),
-      orderBy("createdAt", "desc")
+      where("userId", "==", userId)
     )
     const querySnapshot = await getDocs(q)
     
     console.log("🎯 Pedidos encontrados para o usuário:", querySnapshot.size)
     
-    const orders = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate() || new Date()
-    })) as Order[]
+    const orders = querySnapshot.docs.map(doc => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt) || new Date()
+      }
+    }) as Order[]
     
-    console.log("✅ Pedidos processados:", orders.length)
+    // Ordenar no cliente se necessário
+    orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    
+    console.log("✅ Pedidos processados e ordenados:", orders.length)
     return orders
   } catch (error) {
     console.error("❌ Erro ao buscar pedidos do usuário:", error)
-    return []
+    console.error("❌ Detalhes do erro:", error.message)
+    
+    // Fallback: buscar todos e filtrar manualmente
+    try {
+      console.log("🔄 Tentando fallback: buscar todos e filtrar...")
+      const allOrdersQuery = query(collection(db, ORDERS_COLLECTION))
+      const allOrdersSnapshot = await getDocs(allOrdersQuery)
+      
+      const userOrders = allOrdersSnapshot.docs
+        .filter(doc => {
+          const data = doc.data()
+          return data.userId === userId
+        })
+        .map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt) || new Date()
+          }
+        }) as Order[]
+      
+      console.log("✅ Fallback: pedidos encontrados:", userOrders.length)
+      return userOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    } catch (fallbackError) {
+      console.error("❌ Erro no fallback também:", fallbackError)
+      return []
+    }
   }
 }

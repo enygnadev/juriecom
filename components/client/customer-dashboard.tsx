@@ -217,6 +217,19 @@ export function CustomerDashboard() {
     loadUserData()
   }, [user, userProfile])
 
+  // Reload automático após 2 segundos se não houver dados
+  useEffect(() => {
+    if (!loading && user && orders.length === 0) {
+      console.log("🔄 Nenhum pedido encontrado, tentando reload em 3 segundos...")
+      const timeout = setTimeout(() => {
+        console.log("🔄 Executando reload...")
+        loadUserData()
+      }, 3000)
+      
+      return () => clearTimeout(timeout)
+    }
+  }, [loading, user, orders.length])
+
   const handleProfileUpdate = async () => {
     if (!user) return
 
