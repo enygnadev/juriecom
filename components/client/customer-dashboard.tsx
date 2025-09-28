@@ -514,17 +514,41 @@ export function CustomerDashboard() {
       await uploadBytes(storageRef, file)
       const downloadURL = await getDownloadURL(storageRef)
 
-      // Atualizar o documento do pedido no Firestore
-      const orderRef = doc(db, 'orders', orderId)
-      await updateDoc(orderRef, {
-        [`documents.${productId}.${documentName}`]: {
-          url: downloadURL,
-          fileName: file.name,
-          uploadedAt: new Date(),
-          uploadedBy: user.uid
-        },
-        updatedAt: new Date()
-      })
+      // Encontrar o item no pedido
+      const order = orders.find(o => o.id === orderId)
+      const itemIndex = order?.items.findIndex(item => item.id === productId || item.productId === productId)
+      
+      if (order && itemIndex !== undefined && itemIndex >= 0) {
+        // Buscar documentos existentes do item
+        const currentItem = order.items[itemIndex]
+        const currentDocuments = (currentItem as any).documents || []
+        
+        // Encontrar ou criar o documento
+        const docIndex = currentDocuments.findIndex((d: any) => d.name === documentName)
+        
+        if (docIndex >= 0) {
+          // Atualizar documento existente
+          currentDocuments[docIndex] = {
+            name: documentName,
+            url: downloadURL,
+            uploadedAt: new Date()
+          }
+        } else {
+          // Adicionar novo documento
+          currentDocuments.push({
+            name: documentName,
+            url: downloadURL,
+            uploadedAt: new Date()
+          })
+        }
+        
+        // Atualizar no Firestore
+        const orderRef = doc(db, 'orders', orderId)
+        await updateDoc(orderRef, {
+          [`items.${itemIndex}.documents`]: currentDocuments,
+          updatedAt: new Date()
+        })
+      }
 
       // Atualizar o estado local
       setOrderDocuments(prev => ({
@@ -559,15 +583,35 @@ export function CustomerDashboard() {
   }
 
   const getDocumentStatus = (order: Order, productId: string, documentName: string) => {
-    const documents = (order as any).documents
-    if (documents?.[productId]?.[documentName]) {
-      return {
-        uploaded: true,
-        url: documents[productId][documentName].url,
-        fileName: documents[productId][documentName].fileName,
-        uploadedAt: documents[productId][documentName].uploadedAt
+    // Buscar o item correspondente ao productId
+    const item = order.items.find(item => item.id === productId || item.productId === productId)
+    if (!item) return { uploaded: false }
+
+    // Verificar se tem documentos no formato do Firebase (array de documentos)
+    const documents = (item as any).documents
+    if (documents && Array.isArray(documents)) {
+      const doc = documents.find((d: any) => d.name === documentName)
+      if (doc && doc.url) {
+        return {
+          uploaded: true,
+          url: doc.url,
+          fileName: doc.name,
+          uploadedAt: doc.uploadedAt
+        }
       }
     }
+
+    // Verificar formato alternativo (objeto com chaves)
+    const orderDocuments = (order as any).documents
+    if (orderDocuments?.[productId]?.[documentName]) {
+      return {
+        uploaded: true,
+        url: orderDocuments[productId][documentName].url,
+        fileName: orderDocuments[productId][documentName].fileName,
+        uploadedAt: orderDocuments[productId][documentName].uploadedAt
+      }
+    }
+
     return { uploaded: false }
   }
 
