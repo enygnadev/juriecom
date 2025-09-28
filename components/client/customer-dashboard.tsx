@@ -523,7 +523,7 @@ export function CustomerDashboard() {
   const calculateTotalSpent = (): number => {
     return orders
       .filter(order => order.status !== 'cancelled')
-      .reduce((total, order) => total + order.total, 0)
+      .reduce((total, order) => total + (order.total || order.totalPrice || 0), 0)
   }
 
   const getOrderStats = () => {
@@ -741,7 +741,7 @@ export function CustomerDashboard() {
 
                           <div className="flex justify-between items-center font-medium">
                             <span>Total:</span>
-                            <span className="text-lg">R$ {order.total.toFixed(2)}</span>
+                            <span className="text-lg">R$ {(order.total || order.totalPrice || 0).toFixed(2)}</span>
                           </div>
                         </div>
                       </CardContent>
