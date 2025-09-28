@@ -263,8 +263,10 @@ export function Checkout() {
       // Criar o pedido
       const orderData = {
         userId: user.uid,
+        userEmail: user.email, // Campo adicional para debug
         items: orderItems,
         total,
+        totalPrice: total, // Campo duplicado para compatibilidade
         shippingFee: finalShippingFee,
         status: "pending" as const,
         customerInfo: {

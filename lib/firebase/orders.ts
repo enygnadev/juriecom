@@ -108,9 +108,12 @@ export async function getOrdersByUser(userId: string): Promise<Order[]> {
       console.log("📝 Pedido completo:", {
         id: doc.id, 
         userId: data.userId,
+        userEmail: data.userEmail,
         status: data.status,
         total: data.total,
-        createdAt: data.createdAt?.toDate?.() || data.createdAt
+        totalPrice: data.totalPrice,
+        createdAt: data.createdAt?.toDate?.() || data.createdAt,
+        allFields: Object.keys(data)
       })
     })
     
