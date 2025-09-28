@@ -14,6 +14,7 @@ import { ShoppingCart, Upload, CheckCircle, ArrowRight, FileText, X } from "luci
 import { toast } from "sonner"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { getFirestore, collection, addDoc } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
 import { app } from "@/lib/firebase/config"
 import { getDocumentsForCartItem } from "@/lib/product-templates"
 
@@ -36,6 +37,7 @@ export default function PreVendaPage() {
 
   const storage = getStorage(app)
   const db = getFirestore(app)
+  const auth = getAuth(app)
 
   // Função para inicializar os documentos necessários para cada produto
   useEffect(() => {
@@ -178,8 +180,18 @@ export default function PreVendaPage() {
     setLoading(true)
     
     try {
+      // Obter usuário atual
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        toast.error("Você precisa estar logado para finalizar o pedido.")
+        router.push("/auth")
+        return
+      }
+
       // Criar pedido com documentos no Firestore
       const orderData = {
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
         items: cartItems.map(item => ({
           id: item.id,
           title: item.title,
