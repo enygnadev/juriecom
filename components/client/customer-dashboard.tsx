@@ -44,7 +44,10 @@ import {
   FileText,
   Settings,
   UserCheck,
-  ShoppingCart
+  ShoppingCart,
+  Upload,
+  File,
+  X
 } from "lucide-react"
 import { useAuth } from "@/components/providers/auth-provider"
 import { getOrdersByUser } from "@/lib/firebase/orders"
@@ -63,6 +66,10 @@ import {
   exportUserData,
   deleteUserDataCompletely
 } from "@/lib/firebase/users"
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { getFirestore, doc, updateDoc } from "firebase/firestore"
+import { app } from "@/lib/firebase/config"
+import { getDocumentsForCartItem } from "@/lib/product-templates"
 import { useToast } from "@/hooks/use-toast"
 import type { Order } from "@/lib/types"
 
@@ -121,6 +128,8 @@ interface WishlistItem {
 export function CustomerDashboard() {
   const { user, userProfile } = useAuth()
   const { toast } = useToast()
+  const storage = getStorage(app)
+  const db = getFirestore(app)
   const [orders, setOrders] = useState<Order[]>([])
   const [addresses, setAddresses] = useState<Address[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -134,6 +143,10 @@ export function CustomerDashboard() {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deletingItem, setDeletingItem] = useState<{type: string, id: string} | null>(null)
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null)
+  const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false)
+  const [uploadingDocuments, setUploadingDocuments] = useState<{[key: string]: boolean}>({})
+  const [orderDocuments, setOrderDocuments] = useState<{[orderId: string]: {[productId: string]: {[document: string]: string}}}>({})
   
   const [profile, setProfile] = useState<UserProfile>({
     displayName: user?.displayName || "",
@@ -489,6 +502,80 @@ export function CustomerDashboard() {
     return numbers.replace(/(\d{5})(\d{3})/, '$1-$2')
   }
 
+  const handleDocumentUpload = async (orderId: string, productId: string, documentName: string, file: File) => {
+    if (!user) return
+
+    const uploadKey = `${orderId}-${productId}-${documentName}`
+    setUploadingDocuments(prev => ({ ...prev, [uploadKey]: true }))
+
+    try {
+      // Upload do arquivo para o Firebase Storage
+      const storageRef = ref(storage, `orders/${orderId}/products/${productId}/${documentName}/${file.name}`)
+      await uploadBytes(storageRef, file)
+      const downloadURL = await getDownloadURL(storageRef)
+
+      // Atualizar o documento do pedido no Firestore
+      const orderRef = doc(db, 'orders', orderId)
+      await updateDoc(orderRef, {
+        [`documents.${productId}.${documentName}`]: {
+          url: downloadURL,
+          fileName: file.name,
+          uploadedAt: new Date(),
+          uploadedBy: user.uid
+        },
+        updatedAt: new Date()
+      })
+
+      // Atualizar o estado local
+      setOrderDocuments(prev => ({
+        ...prev,
+        [orderId]: {
+          ...prev[orderId],
+          [productId]: {
+            ...prev[orderId]?.[productId],
+            [documentName]: downloadURL
+          }
+        }
+      }))
+
+      toast({
+        title: "Sucesso",
+        description: `${documentName} enviado com sucesso!`
+      })
+
+      // Recarregar dados dos pedidos
+      await loadUserData()
+
+    } catch (error) {
+      console.error("Erro ao fazer upload do documento:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao enviar documento. Tente novamente.",
+        variant: "destructive"
+      })
+    } finally {
+      setUploadingDocuments(prev => ({ ...prev, [uploadKey]: false }))
+    }
+  }
+
+  const getDocumentStatus = (order: Order, productId: string, documentName: string) => {
+    const documents = (order as any).documents
+    if (documents?.[productId]?.[documentName]) {
+      return {
+        uploaded: true,
+        url: documents[productId][documentName].url,
+        fileName: documents[productId][documentName].fileName,
+        uploadedAt: documents[productId][documentName].uploadedAt
+      }
+    }
+    return { uploaded: false }
+  }
+
+  const openOrderDetails = (order: Order) => {
+    setSelectedOrderDetails(order)
+    setShowOrderDetailsModal(true)
+  }
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       pending: { label: "Pendente", color: "bg-yellow-500", icon: Clock },
@@ -698,9 +785,10 @@ export function CustomerDashboard() {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => setSelectedOrder(order)}
+                              onClick={() => openOrderDetails(order)}
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-4 h-4 mr-1" />
+                              Detalhes
                             </Button>
                           </div>
                         </div>
@@ -1588,6 +1676,260 @@ export function CustomerDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modal de Detalhes do Pedido */}
+      <Dialog open={showOrderDetailsModal} onOpenChange={setShowOrderDetailsModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Detalhes do Pedido #{selectedOrderDetails?.id.slice(-8)}</span>
+              {selectedOrderDetails && getStatusBadge(selectedOrderDetails.status)}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedOrderDetails && (
+            <div className="space-y-6">
+              {/* Informações Gerais */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Informações do Pedido
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Data do Pedido</p>
+                      <p>{selectedOrderDetails.createdAt.toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Status</p>
+                      <div className="mt-1">
+                        {getStatusBadge(selectedOrderDetails.status)}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Total</p>
+                      <p className="text-lg font-bold">R$ {(selectedOrderDetails.total || selectedOrderDetails.totalPrice || 0).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Itens</p>
+                      <p>{selectedOrderDetails.items.length} item(s)</p>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium">Progresso do Pedido</span>
+                      <span className="text-sm text-muted-foreground">
+                        {getOrderProgress(selectedOrderDetails.status)}%
+                      </span>
+                    </div>
+                    <Progress value={getOrderProgress(selectedOrderDetails.status)} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Itens e Documentos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Itens e Documentos Necessários
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {selectedOrderDetails.items.map((item, index) => {
+                      const requiredDocuments = getDocumentsForCartItem(item)
+                      
+                      return (
+                        <div key={index} className="border rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="font-medium">{item.title || item.name}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Quantidade: {item.quantity} | Valor: R$ {(item.price * item.quantity).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {requiredDocuments.length > 0 ? (
+                            <div>
+                              <h5 className="font-medium mb-3">Documentos Necessários:</h5>
+                              <div className="space-y-3">
+                                {requiredDocuments.map((documentName) => {
+                                  const docStatus = getDocumentStatus(selectedOrderDetails, item.id, documentName)
+                                  const uploadKey = `${selectedOrderDetails.id}-${item.id}-${documentName}`
+                                  const isUploading = uploadingDocuments[uploadKey]
+
+                                  return (
+                                    <div key={documentName} className="flex items-center justify-between p-3 border rounded">
+                                      <div className="flex items-center gap-2">
+                                        <File className="w-4 h-4" />
+                                        <span className="text-sm font-medium">{documentName}</span>
+                                        {docStatus.uploaded && (
+                                          <Badge variant="default" className="bg-green-500">
+                                            <CheckCircle className="w-3 h-3 mr-1" />
+                                            Enviado
+                                          </Badge>
+                                        )}
+                                        {!docStatus.uploaded && (
+                                          <Badge variant="secondary">
+                                            <Clock className="w-3 h-3 mr-1" />
+                                            Pendente
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2">
+                                        {docStatus.uploaded ? (
+                                          <>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => window.open(docStatus.url, '_blank')}
+                                            >
+                                              <Eye className="w-3 h-3 mr-1" />
+                                              Ver
+                                            </Button>
+                                            <div>
+                                              <Input
+                                                type="file"
+                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                onChange={(e) => {
+                                                  const file = e.target.files?.[0]
+                                                  if (file) {
+                                                    handleDocumentUpload(selectedOrderDetails.id, item.id, documentName, file)
+                                                  }
+                                                }}
+                                                className="hidden"
+                                                id={`upload-${uploadKey}`}
+                                                disabled={isUploading}
+                                              />
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => document.getElementById(`upload-${uploadKey}`)?.click()}
+                                                disabled={isUploading}
+                                              >
+                                                {isUploading ? (
+                                                  <>
+                                                    <Upload className="w-3 h-3 mr-1 animate-spin" />
+                                                    Enviando...
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <Upload className="w-3 h-3 mr-1" />
+                                                    Reenviar
+                                                  </>
+                                                )}
+                                              </Button>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div>
+                                            <Input
+                                              type="file"
+                                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0]
+                                                if (file) {
+                                                  handleDocumentUpload(selectedOrderDetails.id, item.id, documentName, file)
+                                                }
+                                              }}
+                                              className="hidden"
+                                              id={`upload-${uploadKey}`}
+                                              disabled={isUploading}
+                                            />
+                                            <Button
+                                              variant="default"
+                                              size="sm"
+                                              onClick={() => document.getElementById(`upload-${uploadKey}`)?.click()}
+                                              disabled={isUploading}
+                                            >
+                                              {isUploading ? (
+                                                <>
+                                                  <Upload className="w-3 h-3 mr-1 animate-spin" />
+                                                  Enviando...
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Upload className="w-3 h-3 mr-1" />
+                                                  Enviar
+                                                </>
+                                              )}
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-muted-foreground">
+                              <FileText className="w-8 h-8 mx-auto mb-2" />
+                              <p>Nenhum documento necessário para este item</p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Informações do Cliente */}
+              {(selectedOrderDetails as any).customerInfo && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Informações de Entrega
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Nome</p>
+                        <p>{(selectedOrderDetails as any).customerInfo.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Email</p>
+                        <p>{(selectedOrderDetails as any).customerInfo.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Telefone</p>
+                        <p>{(selectedOrderDetails as any).customerInfo.phone || "Não informado"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Endereço</p>
+                        <p>{(selectedOrderDetails as any).customerInfo.address || "Não informado"}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOrderDetailsModal(false)}>
+              <X className="w-4 h-4 mr-2" />
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de confirmação de exclusão */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
