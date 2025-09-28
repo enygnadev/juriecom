@@ -55,14 +55,27 @@ export async function getOrderById(id: string): Promise<Order | null> {
 
 export async function createOrder(order: Omit<Order, "id">): Promise<string | null> {
   try {
-    const db = getDb()
-    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), {
-      ...order,
-      createdAt: new Date()
+    console.log("🆕 Criando pedido:", {
+      userId: order.userId,
+      items: order.items?.length,
+      total: order.total
     })
+    
+    const db = getDb()
+    const orderData = {
+      ...order,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+    
+    console.log("📝 Dados do pedido a ser salvo:", orderData)
+    
+    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderData)
+    
+    console.log("✅ Pedido criado com ID:", docRef.id)
     return docRef.id
   } catch (error) {
-    console.error("Error creating order:", error)
+    console.error("❌ Erro ao criar pedido:", error)
     return null
   }
 }
@@ -81,21 +94,39 @@ export async function updateOrderStatus(orderId: string, status: string): Promis
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
   try {
+    console.log("🔍 Buscando pedidos para usuário:", userId)
     const db = getDb()
+    
+    // Primeiro, vamos buscar todos os pedidos para debug
+    const allOrdersQuery = query(collection(db, ORDERS_COLLECTION))
+    const allOrdersSnapshot = await getDocs(allOrdersQuery)
+    console.log("📦 Total de pedidos no banco:", allOrdersSnapshot.size)
+    
+    // Log dos primeiros pedidos para verificar estrutura
+    allOrdersSnapshot.docs.slice(0, 3).forEach(doc => {
+      console.log("📝 Estrutura do pedido:", doc.id, doc.data())
+    })
+    
+    // Buscar pedidos do usuário específico
     const q = query(
       collection(db, ORDERS_COLLECTION),
       where("userId", "==", userId),
       orderBy("createdAt", "desc")
     )
     const querySnapshot = await getDocs(q)
-
-    return querySnapshot.docs.map(doc => ({
+    
+    console.log("🎯 Pedidos encontrados para o usuário:", querySnapshot.size)
+    
+    const orders = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       createdAt: doc.data().createdAt?.toDate() || new Date()
     })) as Order[]
+    
+    console.log("✅ Pedidos processados:", orders.length)
+    return orders
   } catch (error) {
-    console.error("Error getting user orders:", error)
+    console.error("❌ Erro ao buscar pedidos do usuário:", error)
     return []
   }
 }

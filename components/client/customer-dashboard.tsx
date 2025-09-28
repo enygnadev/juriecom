@@ -161,9 +161,13 @@ export function CustomerDashboard() {
   })
 
   const loadUserData = async () => {
-    if (!user) return
+    if (!user) {
+      console.log("👤 Usuário não autenticado, não carregando dados")
+      return
+    }
 
     try {
+      console.log("🔄 Iniciando carregamento de dados para:", user.uid)
       setLoading(true)
       
       const [userOrders, userAddresses, userPaymentMethods, userWishlist] = await Promise.all([
@@ -172,6 +176,13 @@ export function CustomerDashboard() {
         getUserPaymentMethods(user.uid),
         getUserWishlist(user.uid)
       ])
+
+      console.log("📦 Dados carregados:", {
+        orders: userOrders.length,
+        addresses: userAddresses.length,
+        paymentMethods: userPaymentMethods.length,
+        wishlist: userWishlist.length
+      })
 
       setOrders(userOrders)
       setAddresses(userAddresses as Address[])
@@ -191,7 +202,7 @@ export function CustomerDashboard() {
       }
 
     } catch (error) {
-      console.error("Erro ao carregar dados do usuário:", error)
+      console.error("❌ Erro ao carregar dados do usuário:", error)
       toast({
         title: "Erro",
         description: "Erro ao carregar seus dados",
