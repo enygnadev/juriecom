@@ -161,15 +161,17 @@ export default function PreVendaPage() {
     return requiredDocuments.every(document => productUploads[document]?.uploaded === true)
   }
 
-  const allProductsComplete = cartItems.length > 0 && cartItems.every(item => isProductComplete(item.id))
+  // Permite finalizar mesmo sem todos os documentos
+  const canFinalize = cartItems.length > 0
   
   const getCompletedProductsCount = () => {
     return cartItems.filter(item => isProductComplete(item.id)).length
   }
 
   const handleContinueToCheckout = async () => {
-    if (!allProductsComplete) {
-      toast.error("Por favor, envie todos os documentos necessários antes de continuar.")
+    // Permite continuar mesmo sem todos os documentos
+    if (cartItems.length === 0) {
+      toast.error("Adicione pelo menos um serviço ao carrinho.")
       return
     }
 
@@ -252,7 +254,10 @@ export default function PreVendaPage() {
             Confirmar Pedido
           </h1>
           <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-            Revise seus serviços selecionados e envie os documentos necessários para cada um
+            Revise seus serviços selecionados e opcionalmente envie os documentos para agilizar o processo
+          </p>
+          <p className="text-sm text-blue-600 dark:text-blue-400 mt-2 max-w-xl mx-auto">
+            💡 Você pode finalizar seu pedido agora e enviar os documentos depois
           </p>
         </div>
 
@@ -464,7 +469,7 @@ export default function PreVendaPage() {
                     Total: R$ {total.toFixed(2)}
                   </span>
                   <span className="text-slate-600 dark:text-slate-300">
-                    {cartItems.length > 0 ? Math.round((getCompletedProductsCount() / cartItems.length) * 100) : 0}% concluído
+                    {cartItems.length > 0 ? Math.round((getCompletedProductsCount() / cartItems.length) * 100) : 0}% concluído (opcional)
                   </span>
                 </div>
               </div>
@@ -480,7 +485,7 @@ export default function PreVendaPage() {
                 </Button>
                 <Button
                   onClick={handleContinueToCheckout}
-                  disabled={!allProductsComplete || loading}
+                  disabled={!canFinalize || loading}
                   className="lg:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
                 >
                   {loading ? (
