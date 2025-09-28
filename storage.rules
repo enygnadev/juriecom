@@ -63,6 +63,19 @@ service firebase.storage {
         request.resource.size < 10 * 1024 * 1024; // Máximo 10MB
     }
     
+    // Regras para documentos relacionados a produtos/pedidos específicos
+    match /documents/{productId}/{fileName} {
+      // Usuários autenticados podem ler documentos de produtos
+      allow read: if request.auth != null;
+      
+      // Apenas admins podem escrever
+      allow write: if isAdmin() &&
+        (request.resource.contentType.matches('image/.*') || 
+         request.resource.contentType == 'application/pdf' ||
+         request.resource.contentType.matches('text/.*')) &&
+        request.resource.size < 10 * 1024 * 1024; // Máximo 10MB
+    }
+    
     // Regras para arquivos temporários/uploads
     match /temp/{userId}/{fileName} {
       // Apenas usuário autenticado pode acessar seus arquivos temporários
@@ -79,6 +92,16 @@ service firebase.storage {
     // Regras para logs do sistema (apenas admins)
     match /logs/{fileName} {
       allow read, write: if isAdmin();
+    }
+    
+    // Regras para documentos gerais (fallback mais permissivo)
+    match /documents/{allPaths=**} {
+      // Leitura para usuários autenticados
+      allow read: if request.auth != null;
+      
+      // Escrita apenas para admins
+      allow write: if isAdmin() &&
+        request.resource.size < 10 * 1024 * 1024; // Máximo 10MB
     }
     
     // Regra padrão - negar acesso a outros caminhos
