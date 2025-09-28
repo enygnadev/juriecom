@@ -250,9 +250,7 @@ export function CustomerDashboard() {
     try {
       await updateUserProfile(user.uid, {
         ...profile,
-        updatedAt: new Date(),
-        consentDate: new Date(),
-        consentVersion: "2.0"
+        updatedAt: new Date()
       })
       
       toast({
@@ -654,7 +652,7 @@ export function CustomerDashboard() {
   const calculateTotalSpent = (): number => {
     return orders
       .filter(order => order.status !== 'cancelled')
-      .reduce((total, order) => total + (order.total || order.totalPrice || 0), 0)
+      .reduce((total, order) => total + (order.total || (order as any).totalPrice || 0), 0)
   }
 
   const getOrderStats = () => {
@@ -873,7 +871,7 @@ export function CustomerDashboard() {
 
                           <div className="flex justify-between items-center font-medium">
                             <span>Total:</span>
-                            <span className="text-lg">R$ {(order.total || order.totalPrice || 0).toFixed(2)}</span>
+                            <span className="text-lg">R$ {(order.total || (order as any).totalPrice || 0).toFixed(2)}</span>
                           </div>
                         </div>
                       </CardContent>
@@ -1761,7 +1759,7 @@ export function CustomerDashboard() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Total</p>
-                      <p className="text-lg font-bold">R$ {(selectedOrderDetails.total || selectedOrderDetails.totalPrice || 0).toFixed(2)}</p>
+                      <p className="text-lg font-bold">R$ {(selectedOrderDetails.total || (selectedOrderDetails as any).totalPrice || 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Itens</p>

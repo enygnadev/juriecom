@@ -1,4 +1,3 @@
-
 import { doc, getDoc, getDocs, collection, updateDoc, deleteDoc, query, orderBy, setDoc, where, addDoc } from "firebase/firestore"
 import { getDb } from "./firestore"
 import type { User } from "@/lib/types"
@@ -91,7 +90,7 @@ export async function getUserAddresses(userId: string) {
       orderBy("isDefault", "desc")
     )
     const querySnapshot = await getDocs(q)
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -105,23 +104,23 @@ export async function getUserAddresses(userId: string) {
 export async function addUserAddress(userId: string, address: any) {
   try {
     const db = getDb()
-    
+
     // Se for o endereço padrão, remover padrão dos outros
     if (address.isDefault) {
       const existingAddresses = await getUserAddresses(userId)
       for (const addr of existingAddresses) {
-        if (addr.isDefault) {
+        if ((addr as any).isDefault) {
           await updateDoc(doc(db, ADDRESSES_COLLECTION, addr.id), { isDefault: false })
         }
       }
     }
-    
+
     const docRef = await addDoc(collection(db, ADDRESSES_COLLECTION), {
       ...address,
       userId,
       createdAt: new Date()
     })
-    
+
     return docRef.id
   } catch (error) {
     console.error("Error adding address:", error)
@@ -163,7 +162,7 @@ export async function getUserPaymentMethods(userId: string) {
       orderBy("isDefault", "desc")
     )
     const querySnapshot = await getDocs(q)
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -177,23 +176,23 @@ export async function getUserPaymentMethods(userId: string) {
 export async function addUserPaymentMethod(userId: string, paymentMethod: any) {
   try {
     const db = getDb()
-    
+
     // Se for o método padrão, remover padrão dos outros
     if (paymentMethod.isDefault) {
       const existingMethods = await getUserPaymentMethods(userId)
       for (const method of existingMethods) {
-        if (method.isDefault) {
+        if ((method as any).isDefault) {
           await updateDoc(doc(db, PAYMENT_METHODS_COLLECTION, method.id), { isDefault: false })
         }
       }
     }
-    
+
     const docRef = await addDoc(collection(db, PAYMENT_METHODS_COLLECTION), {
       ...paymentMethod,
       userId,
       createdAt: new Date()
     })
-    
+
     return docRef.id
   } catch (error) {
     console.error("Error adding payment method:", error)
@@ -223,7 +222,7 @@ export async function getUserWishlist(userId: string) {
       orderBy("createdAt", "desc")
     )
     const querySnapshot = await getDocs(q)
-    
+
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -238,7 +237,7 @@ export async function getUserWishlist(userId: string) {
 export async function addToWishlist(userId: string, productId: string, productData: any) {
   try {
     const db = getDb()
-    
+
     // Verificar se já existe
     const q = query(
       collection(db, WISHLIST_COLLECTION),
@@ -246,18 +245,18 @@ export async function addToWishlist(userId: string, productId: string, productDa
       where("productId", "==", productId)
     )
     const existing = await getDocs(q)
-    
+
     if (!existing.empty) {
       return null // Já existe
     }
-    
+
     const docRef = await addDoc(collection(db, WISHLIST_COLLECTION), {
       userId,
       productId,
       ...productData,
       createdAt: new Date()
     })
-    
+
     return docRef.id
   } catch (error) {
     console.error("Error adding to wishlist:", error)
@@ -274,11 +273,11 @@ export async function removeFromWishlist(userId: string, productId: string) {
       where("productId", "==", productId)
     )
     const querySnapshot = await getDocs(q)
-    
+
     for (const doc of querySnapshot.docs) {
       await deleteDoc(doc.ref)
     }
-    
+
     return true
   } catch (error) {
     console.error("Error removing from wishlist:", error)
@@ -295,7 +294,7 @@ export async function exportUserData(userId: string) {
       getUserPaymentMethods(userId),
       getUserWishlist(userId)
     ])
-    
+
     return {
       profile,
       addresses,
@@ -319,31 +318,31 @@ export async function exportUserData(userId: string) {
 export async function deleteUserDataCompletely(userId: string) {
   try {
     const db = getDb()
-    
+
     // Deletar endereços
     const addressesQuery = query(collection(db, ADDRESSES_COLLECTION), where("userId", "==", userId))
     const addressesSnapshot = await getDocs(addressesQuery)
     for (const doc of addressesSnapshot.docs) {
       await deleteDoc(doc.ref)
     }
-    
+
     // Deletar métodos de pagamento
     const paymentQuery = query(collection(db, PAYMENT_METHODS_COLLECTION), where("userId", "==", userId))
     const paymentSnapshot = await getDocs(paymentQuery)
     for (const doc of paymentSnapshot.docs) {
       await deleteDoc(doc.ref)
     }
-    
+
     // Deletar wishlist
     const wishlistQuery = query(collection(db, WISHLIST_COLLECTION), where("userId", "==", userId))
     const wishlistSnapshot = await getDocs(wishlistQuery)
     for (const doc of wishlistSnapshot.docs) {
       await deleteDoc(doc.ref)
     }
-    
+
     // Deletar perfil do usuário
     await deleteDoc(doc(db, USERS_COLLECTION, userId))
-    
+
     return true
   } catch (error) {
     console.error("Error deleting user data:", error)
