@@ -1775,16 +1775,15 @@ export function CustomerDashboard() {
                                       <div className="flex items-center gap-2">
                                         <File className="w-4 h-4" />
                                         <span className="text-sm font-medium">{documentName}</span>
-                                        {docStatus.uploaded && (
-                                          <Badge variant="default" className="bg-green-500">
+                                        {docStatus.uploaded ? (
+                                          <Badge variant="default" className="bg-green-500 text-white hover:bg-green-600">
                                             <CheckCircle className="w-3 h-3 mr-1" />
                                             Enviado
                                           </Badge>
-                                        )}
-                                        {!docStatus.uploaded && (
-                                          <Badge variant="secondary">
+                                        ) : (
+                                          <Badge variant="destructive" className="bg-red-500 text-white hover:bg-red-600">
                                             <Clock className="w-3 h-3 mr-1" />
-                                            Pendente
+                                            Pendente de enviar
                                           </Badge>
                                         )}
                                       </div>
@@ -1850,20 +1849,26 @@ export function CustomerDashboard() {
                                               disabled={isUploading}
                                             />
                                             <Button
-                                              variant="default"
+                                              variant={docStatus.uploaded ? "outline" : "default"}
                                               size="sm"
                                               onClick={() => document.getElementById(`upload-${uploadKey}`)?.click()}
                                               disabled={isUploading}
+                                              className={docStatus.uploaded ? "border-green-500 text-green-600 hover:bg-green-50" : "bg-red-500 hover:bg-red-600 text-white"}
                                             >
                                               {isUploading ? (
                                                 <>
                                                   <Upload className="w-3 h-3 mr-1 animate-spin" />
                                                   Enviando...
                                                 </>
-                                              ) : (
+                                              ) : docStatus.uploaded ? (
                                                 <>
                                                   <Upload className="w-3 h-3 mr-1" />
-                                                  Enviar
+                                                  Reenviar
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Clock className="w-3 h-3 mr-1" />
+                                                  Pendente de enviar
                                                 </>
                                               )}
                                             </Button>
