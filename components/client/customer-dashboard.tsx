@@ -1827,7 +1827,7 @@ export function CustomerDashboard() {
                                         ) : (
                                           <Badge variant="destructive" className="bg-red-500 text-white hover:bg-red-600">
                                             <Clock className="w-3 h-3 mr-1" />
-                                            Pendente de enviar
+                                            Pendente
                                           </Badge>
                                         )}
                                       </div>
@@ -1912,7 +1912,7 @@ export function CustomerDashboard() {
                                               ) : (
                                                 <>
                                                   <Clock className="w-3 h-3 mr-1" />
-                                                  Pendente de enviar
+                                                  Pendente
                                                 </>
                                               )}
                                             </Button>

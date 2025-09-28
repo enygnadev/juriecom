@@ -1,0 +1,48 @@
+~/workspace$ tsc --noEmit
+components/client/customer-dashboard.tsx:254:9 - error TS2353: Object literal may only specify known properties, and 'consentDate' does not exist in type 'Partial<User>'.
+
+254         consentDate: new Date(),
+            ~~~~~~~~~~~
+
+components/client/customer-dashboard.tsx:657:63 - error TS2339: Property 'totalPrice' does not exist on type 'Order'.
+
+657       .reduce((total, order) => total + (order.total || order.totalPrice || 0), 0)
+                                                                  ~~~~~~~~~~
+
+components/client/customer-dashboard.tsx:876:81 - error TS2339: Property 'totalPrice' does not exist on type 'Order'.
+
+876                             <span className="text-lg">R$ {(order.total || order.totalPrice || 0).toFixed(2)}</span>
+                                                                                    ~~~~~~~~~~
+
+components/client/customer-dashboard.tsx:1764:112 - error TS2339: Property 'totalPrice' does not exist on type 'Order'.
+
+1764                       <p className="text-lg font-bold">R$ {(selectedOrderDetails.total || selectedOrderDetails.totalPrice || 0).toFixed(2)}</p>
+                                                                                                                    ~~~~~~~~~~
+
+lib/firebase/orders.ts:145:42 - error TS18046: 'error' is of type 'unknown'.
+
+145     console.error("❌ Detalhes do erro:", error.message)
+                                             ~~~~~
+
+lib/firebase/orders.ts:150:47 - error TS2304: Cannot find name 'db'.
+
+150       const allOrdersQuery = query(collection(db, ORDERS_COLLECTION))
+                                                  ~~
+
+lib/firebase/users.ts:113:18 - error TS2339: Property 'isDefault' does not exist on type '{ id: string; }'.
+
+113         if (addr.isDefault) {
+                     ~~~~~~~~~
+
+lib/firebase/users.ts:185:20 - error TS2339: Property 'isDefault' does not exist on type '{ id: string; }'.
+
+185         if (method.isDefault) {
+                       ~~~~~~~~~
+
+
+Found 8 errors in 3 files.
+
+Errors  Files
+     4  components/client/customer-dashboard.tsx:254
+     2  lib/firebase/orders.ts:145
+     2  lib/firebase/users.ts:113
