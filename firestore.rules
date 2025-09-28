@@ -197,6 +197,53 @@ service cloud.firestore {
     }
     
     // ========================================
+    // ENDEREÇOS DE USUÁRIO - DASHBOARD CLIENTE
+    // ========================================
+    match /addresses/{addressId} {
+      allow read, write: if isAuthenticated() && 
+        isOwner(resource.data.userId);
+        
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        hasRequiredFields(['street', 'city', 'state', 'zipCode', 'userId']) &&
+        request.resource.data.street is string &&
+        request.resource.data.street.size() > 0 &&
+        request.resource.data.city is string &&
+        request.resource.data.city.size() > 0 &&
+        request.resource.data.state is string &&
+        request.resource.data.state.size() > 0 &&
+        request.resource.data.zipCode is string &&
+        request.resource.data.zipCode.size() > 0;
+    }
+    
+    // ========================================
+    // MÉTODOS DE PAGAMENTO - DASHBOARD CLIENTE
+    // ========================================
+    match /paymentMethods/{paymentId} {
+      allow read, write: if isAuthenticated() && 
+        isOwner(resource.data.userId);
+        
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        hasRequiredFields(['type', 'userId']) &&
+        request.resource.data.type in ['credit', 'debit', 'pix'];
+    }
+    
+    // ========================================
+    // LISTA DE DESEJOS - DASHBOARD CLIENTE
+    // ========================================
+    match /wishlist/{wishlistId} {
+      allow read, write: if isAuthenticated() && 
+        isOwner(resource.data.userId);
+        
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        hasRequiredFields(['productId', 'userId']) &&
+        request.resource.data.productId is string &&
+        request.resource.data.productId.size() > 0;
+    }
+    
+    // ========================================
     // CARRINHO - TOTALMENTE PRIVADO POR USUÁRIO
     // ========================================
     match /carts/{userId} {
@@ -211,7 +258,7 @@ service cloud.firestore {
     }
     
     // ========================================
-    // ENDEREÇOS - TOTALMENTE PRIVADO POR USUÁRIO
+    // ENDEREÇOS - TOTALMENTE PRIVADO POR USUÁRIO (NESTED)
     // ========================================
     match /user_addresses/{userId} {
       match /addresses/{addressId} {

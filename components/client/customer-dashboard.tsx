@@ -547,7 +547,7 @@ export function CustomerDashboard() {
               Cliente Verificado
             </Badge>
             <span className="text-sm text-muted-foreground">
-              Membro desde {userProfile?.createdAt?.getFullYear() || new Date().getFullYear()}
+              Membro desde {userProfile?.createdAt ? new Date(userProfile.createdAt).getFullYear() : new Date().getFullYear()}
             </span>
           </div>
         </div>
