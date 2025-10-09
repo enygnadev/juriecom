@@ -1,0 +1,390 @@
+PROMPT PARA O REPLIT (migrar Firestore → PixelDB)
+
+Objetivo
+
+Remover completamente o Firebase/Firestore do projeto.
+
+Usar somente o PixelDB via HTTP (fetch) com:
+
+const pixelDB = {
+  apiKey: "pk_live_7d0e8def929b8890e35b23ffcf4e32a095232f898516aa64fef59029f58a7e51",
+  endpoint: "https://6bef9e6f-a2c1-4c84-b9ec-885cffa9b11f-00-d5kjdpx05pn4.kirk.replit.dev/api/ingest"
+};
+
+
+Manter as coleções atuais: products, users, orders, categories, sizes.
+
+Preservar o shape dos documentos (campos/ids).
+
+Nunca expor a API key no client: mover para variáveis de ambiente e chamar via rotas server-side.
+
+1) Limpeza de dependências e env
+
+Remova dependências do Firebase:
+
+No package.json:
+
+Remover "firebase" e "@firebase/*" de dependencies/devDependencies.
+
+Rodar:
+
+npm rm firebase @firebase/app @firebase/firestore @firebase/auth
+
+
+No repositório, apagar arquivos específicos do Firebase (se existirem):
+
+lib/firebase/* (ex.: client.ts, admin.ts)
+
+firebase.json, .firebaserc, firestore.rules, storage.rules
+
+Adicionar variáveis de ambiente (Replit Secrets ou .env):
+
+NEXT_PUBLIC_DB_PROVIDER=pixeldb
+PIXELDB_API_URL=https://6bef9e6f-a2c1-4c84-b9ec-885cffa9b11f-00-d5kjdpx05pn4.kirk.replit.dev/api
+PIXELDB_API_KEY=pk_live_7d0e8def929b8890e35b23ffcf4e32a095232f898516aa64fef59029f58a7e51
+
+
+Obs.: não exponha a chave no client. Usaremos rotas /api/db/ no Next.js para proxy.
+
+2) Camada de dados única (DAL)
+
+Crie os arquivos abaixo. Se o projeto usa src/, ajuste os caminhos para src/lib/....
+
+lib/db/types.ts
+export type ID = string;
+
+export interface QueryFilter {
+  field: string;
+  op: "<" | "<=" | "==" | ">=" | ">" | "in" | "array-contains" | "array-contains-any";
+  value: any;
+}
+
+export interface QueryOrder {
+  field: string;
+  direction?: "asc" | "desc";
+}
+
+export interface QueryOptions {
+  where?: QueryFilter[];
+  orderBy?: QueryOrder[];
+  limit?: number;
+}
+
+export interface DB {
+  getDoc: (collection: string, id: ID) => Promise<any | null>;
+  list: (collection: string, opts?: QueryOptions) => Promise<any[]>;
+  add: (collection: string, data: any, id?: ID) => Promise<ID>;
+  set: (collection: string, id: ID, data: any) => Promise<void>;
+  update: (collection: string, id: ID, patch: Partial<any>) => Promise<void>;
+  remove: (collection: string, id: ID) => Promise<void>;
+}
+
+lib/db/index.ts
+import { createPixelDB } from "./providers/pixeldb";
+export const db = createPixelDB(); // único provider (sem Firebase)
+
+lib/db/providers/pixeldb.ts
+
+Adapter para o PixelDB, usando fetch. Vamos padronizar 4 endpoints no servidor:
+
+POST /api/db/query → listar (com filtros/ordem/limite)
+
+GET /api/db/doc?collection=&id= → obter doc
+
+PUT /api/db/doc → criar/definir com id
+
+PATCH /api/db/doc → atualizar parcial
+
+DELETE /api/db/doc?collection=&id= → remover
+
+O adapter só chama essas rotas (server-side), nunca o PixelDB direto do client.
+
+import type { DB, QueryOptions } from "../types";
+
+async function api(path: string, init?: RequestInit) {
+  const res = await fetch(`/api/db${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`[DB] ${res.status} - ${await res.text()}`);
+  const ct = res.headers.get("content-type") || "";
+  return ct.includes("application/json") ? res.json() : res.text();
+}
+
+export function createPixelDB(): DB {
+  return {
+    async getDoc(collection, id) {
+      const data = await api(`/doc?collection=${encodeURIComponent(collection)}&id=${encodeURIComponent(id)}`);
+      return data || null;
+    },
+    async list(collection, opts?: QueryOptions) {
+      const data = await api(`/query`, { method: "POST", body: JSON.stringify({ collection, opts }) });
+      return Array.isArray(data) ? data : (data.items || []);
+    },
+    async add(collection, payload, id) {
+      if (id) {
+        await api(`/doc`, { method: "PUT", body: JSON.stringify({ collection, id, data: payload }) });
+        return id;
+      }
+      // sem id → deixe o server gerar
+      const created = await api(`/doc`, { method: "PUT", body: JSON.stringify({ collection, data: payload }) });
+      return created.id;
+    },
+    async set(collection, id, payload) {
+      await api(`/doc`, { method: "PUT", body: JSON.stringify({ collection, id, data: payload }) });
+    },
+    async update(collection, id, patch) {
+      await api(`/doc`, { method: "PATCH", body: JSON.stringify({ collection, id, patch }) });
+    },
+    async remove(collection, id) {
+      await api(`/doc?collection=${encodeURIComponent(collection)}&id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+  };
+}
+
+3) Rotas Next.js (server) → PixelDB (proxy seguro)
+
+Assim mantemos a API key no servidor e adaptamos o formato para o endpoint do PixelDB que você forneceu (/api/ingest).
+
+Crie a pasta (ajuste para app router ou pages/api conforme seu projeto):
+
+Usando /app/api (Next 13+ com App Router)
+app/api/db/query/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const base = process.env.PIXELDB_API_URL; // .../api
+const key = process.env.PIXELDB_API_KEY as string;
+
+// Adapte este mapeamento ao que o PixelDB espera receber para consultas
+export async function POST(req: NextRequest) {
+  const { collection, opts } = await req.json();
+
+  // Exemplo: empacotar num formato genérico de "query" pro PixelDB
+  const payload = {
+    action: "query",
+    collection,
+    options: opts || {},
+  };
+
+  const res = await fetch(`${base}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+    body: JSON.stringify({ data: payload }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return new NextResponse(text, { status: res.status });
+  }
+  const json = await res.json();
+  // Padronize o retorno como array
+  const items = Array.isArray(json?.data) ? json.data : (json?.items || []);
+  return NextResponse.json(items);
+}
+
+app/api/db/doc/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const base = process.env.PIXELDB_API_URL; // .../api
+const key = process.env.PIXELDB_API_KEY as string;
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const collection = searchParams.get("collection");
+  const id = searchParams.get("id");
+
+  const payload = { action: "get", collection, id };
+  const res = await fetch(`${base}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+    body: JSON.stringify({ data: payload }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) return new NextResponse(await res.text(), { status: res.status });
+  const json = await res.json();
+  return NextResponse.json(json?.data ?? null);
+}
+
+export async function PUT(req: NextRequest) {
+  const { collection, id, data } = await req.json();
+
+  const payload = { action: "upsert", collection, id, data };
+  const res = await fetch(`${base}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+    body: JSON.stringify({ data: payload }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) return new NextResponse(await res.text(), { status: res.status });
+  const json = await res.json();
+  return NextResponse.json({ id: json?.id || id });
+}
+
+export async function PATCH(req: NextRequest) {
+  const { collection, id, patch } = await req.json();
+
+  const payload = { action: "update", collection, id, patch };
+  const res = await fetch(`${base}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+    body: JSON.stringify({ data: payload }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) return new NextResponse(await res.text(), { status: res.status });
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const collection = searchParams.get("collection");
+  const id = searchParams.get("id");
+
+  const payload = { action: "delete", collection, id };
+  const res = await fetch(`${base}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+    body: JSON.stringify({ data: payload }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) return new NextResponse(await res.text(), { status: res.status });
+  return NextResponse.json({ ok: true });
+}
+
+
+Observação: Como você forneceu um único endpoint (/api/ingest) que recebe { data: ... }, padronizei action para o PixelDB saber o que fazer. Se seu PixelDB já entende outros verbos/caminhos, adapte os payloads.
+
+4) Codemod (substituir uso do Firestore)
+
+Procure em todo o projeto por chamadas do Firebase e troque por db:
+
+De:
+
+import { getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, collection, doc, query, where, orderBy, limit } from "firebase/firestore";
+
+
+Para:
+
+import { db } from "@/lib/db";
+
+
+Substituições comuns:
+
+getDoc(doc(db, "products", id)) → db.getDoc("products", id)
+
+getDocs(query(collection(db,"products"), where("active","==",true))) →
+db.list("products", { where: [{ field: "active", op: "==", value: true }] })
+
+addDoc(collection(db,"orders"), payload) → db.add("orders", payload)
+
+setDoc(doc(db,"users", id), data) → db.set("users", id, data)
+
+updateDoc(doc(db,"users", id), patch) → db.update("users", id, patch)
+
+deleteDoc(doc(db,"products", id)) → db.remove("products", id)
+
+Busca/replace (rápido):
+
+Buscar regex: \b(addDoc|getDoc|getDocs|setDoc|updateDoc|deleteDoc)\b → migrar para db.add|getDoc|list|set|update|remove.
+
+5) Migração de dados (opcional — uma vez)
+
+Se os dados estão no Firestore e precisam ir para o PixelDB.
+
+scripts/export-firestore.mjs
+
+Requer credenciais Admin do Firebase (Service Account). Coloque o JSON no Replit Secret GOOGLE_APPLICATION_CREDENTIALS (caminho) ou carregue o objeto via variável.
+
+import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import fs from "node:fs/promises";
+
+const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+  : null;
+
+initializeApp(serviceAccount ? { credential: cert(serviceAccount) } : { credential: applicationDefault() });
+
+const db = getFirestore();
+const collections = ["products","users","orders","categories","sizes"];
+
+await fs.mkdir("./exports", { recursive: true });
+
+for (const col of collections) {
+  const snap = await db.collection(col).get();
+  const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  await fs.writeFile(`./exports/${col}.json`, JSON.stringify(data, null, 2));
+  console.log(`Exported ${col}: ${data.length}`);
+}
+
+scripts/import-pixeldb.mjs
+import fs from "node:fs/promises";
+
+const base = process.env.PIXELDB_API_URL; // .../api
+const key  = process.env.PIXELDB_API_KEY;
+
+async function ingest(payload) {
+  const res = await fetch(`${base}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+    body: JSON.stringify({ data: payload }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+const collections = ["products","users","orders","categories","sizes"];
+
+for (const col of collections) {
+  const raw = await fs.readFile(`./exports/${col}.json`, "utf-8");
+  const docs = JSON.parse(raw);
+  for (const d of docs) {
+    const { id, ...rest } = d;
+    await ingest({ action: "upsert", collection: col, id, data: rest });
+  }
+  console.log(`Imported ${col}: ${docs.length}`);
+}
+
+
+Executar:
+
+node scripts/export-firestore.mjs
+node scripts/import-pixeldb.mjs
+
+6) Teste rápido (depois do refactor)
+
+Defina NEXT_PUBLIC_DB_PROVIDER=pixeldb (já fixo) e confirme PIXELDB_API_URL/PIXELDB_API_KEY.
+
+Rode:
+
+npm run dev
+
+
+Páginas que listam products e categories devem renderizar igual.
+
+Criar um order → verificar se aparece no PixelDB.
+
+Atualizar users (ex.: perfil) → ver se PATCH funciona.
+
+7) Remoção final do Firebase
+
+Verifique que não restou nenhum import de 'firebase/*'.
+
+Remover qualquer chamada ou init legado.
+
+Confirmar que build/CI não puxa pacotes do Firebase.
+
+8) Observações importantes
+
+Mantivemos nomes de coleções e estrutura dos docs.
+
+A API key do PixelDB fica apenas no servidor (rotas /api/db/*).
+
+Se seu PixelDB tiver endpoints mais específicos do que /ingest, ajuste os payloads e URLs nas rotas server-side.
+
+Caso você use SSG/ISR, garanta que as rotas sejam chamáveis em build (ou crie SDK server-only).
