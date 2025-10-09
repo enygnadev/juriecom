@@ -1,19 +1,15 @@
+import { doc, getDoc, setDoc } from "firebase/firestore"
+import { getDb } from "./firestore"
 
-import { db } from "@/lib/db";
-
-export async function getCart(userId: string) {
-  try {
-    return await db.getDoc("carts", userId);
-  } catch (error) {
-    console.error("Error getting cart:", error);
-    return null;
-  }
+export async function getCart(uid: string) {
+  const db = getDb()
+  const ref = doc(db, "carts", uid)
+  const snap = await getDoc(ref)
+  return snap.exists() ? snap.data() : null
 }
 
-export async function setCart(userId: string, cart: any) {
-  try {
-    await db.set("carts", userId, cart);
-  } catch (error) {
-    console.error("Error setting cart:", error);
-  }
+export async function updateCart(uid: string, items: { productId: string; quantity: number }[]) {
+  const db = getDb()
+  const ref = doc(db, "carts", uid)
+  await setDoc(ref, { items }, { merge: true })
 }
