@@ -1,0 +1,349 @@
+PROMPT PARA O REPLIT (NÍVEL SÊNIOR)
+
+Você é um engenheiro sênior encarregado de evoluir um projeto Next.js + Firebase já existente. Entregue um sistema robusto onde dados viram imagens geradas (evolutivas, com múltiplas versões), armazenadas com metadados no Firestore, arquivos no Storage, backups mensais, consulta rápida e uma Sessão de Imagens Geradas na UI. Priorize segurança (Auth, Rules, App Check), escalabilidade e DX.
+
+1) Contexto e objetivos
+
+Fluxo alvo:
+
+App recebe dados (texto/JSON/arquivo) → cria doc pending no Firestore.
+
+Cloud Function gera/“evolui” imagem (pode subir versões até atingir critério de tamanho/qualidade).
+
+Salvar original e thumb no Storage com versionamento (v1, v2, …).
+
+Gravar metadados (width/height/bytes/format/pHash) e histórico de versões no Firestore.
+
+Fazer backup mensal das versões “estáveis”.
+
+UI: “Sessão de Imagens Geradas” (lista/filtra/pagina/versões/promover versão/URLs assinadas).
+
+Manter o que já existe no repo, mas refatorar quando necessário.
+
+Não deixar arquivos públicos por padrão; use URLs assinadas.
+
+2) Stack e padrões
+
+Next.js 15, TypeScript estrito, React 18, Tailwind.
+
+Firebase (Auth, Firestore, Storage, Functions Node 20, App Check).
+
+Zod para validações, sharp para imagem, pHash (perceptual hash) para dedupe/consulta.
+
+SWR/React Query na UI.
+
+Melhores práticas de DX: scripts, emuladores, .env.local, docs.
+
+3) Esquema de dados (Firestore)
+
+Coleções (aninhadas):
+
+users/{uid}/apps/{appId}/datasets/{datasetId}/images/{imageId}
+
+
+Campos obrigatórios:
+
+status: "pending" | "ready" | "failed"
+createdAt: timestamp
+updatedAt: timestamp
+sourceDataRef: string            // referência ao dado/origem
+currentVersion: number           // ex.: 0 até gerar a primeira
+monthKey: "YYYY-MM"              // partição por mês (consulta/backup)
+tags: string[]
+
+versions: [
+  {
+    v: number,
+    storagePath: string,         // caminho no Storage da versão
+    thumbPath: string,           // caminho do thumbnail
+    width: number,
+    height: number,
+    bytes: number,
+    format: "webp"|"png"|"jpeg",
+    phash: string,
+    createdAt: timestamp
+  }
+]
+
+Índices (crie no firestore.indexes.json)
+
+Simples: updatedAt desc.
+
+Compostos:
+
+(monthKey asc, updatedAt desc)
+
+(tags array-contains, updatedAt desc)
+
+4) Storage layout
+/users/{uid}/apps/{appId}/images/{imageId}/v{n}.webp
+/users/{uid}/apps/{appId}/thumbs/{imageId}/v{n}.webp
+/backups/{uid}/{appId}/{YYYY}/{MM}/{imageId}-v{n}.webp
+
+5) Segurança (Rules + Auth + App Check)
+Firestore Rules (substitua/adapte no projeto)
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      // Usuário só pode acessar seus próprios docs
+      allow read, write: if isOwner(uid);
+
+      match /apps/{appId} {
+        allow read, write: if isOwner(uid);
+
+        match /datasets/{datasetId} {
+          allow read, write: if isOwner(uid);
+
+          match /images/{imageId} {
+            // leitura para o dono
+            allow read: if isOwner(uid);
+
+            // cliente só cria placeholder "pending" com currentVersion=0
+            allow create: if isOwner(uid)
+              && request.resource.data.status == "pending"
+              && request.resource.data.currentVersion == 0
+              && request.resource.data.keys().hasAll(["status","currentVersion","createdAt","updatedAt"]);
+
+            // updates sensíveis bloqueados para cliente (somente Function)
+            allow update, delete: if false;
+          }
+        }
+      }
+    }
+  }
+}
+
+Storage Rules
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    // Arquivos do usuário (não públicos)
+    match /users/{uid}/{allPaths=**} {
+      allow read: if isOwner(uid); // leitura via SDK/URL assinada
+      allow write: if isOwner(uid)
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*')
+        && (
+          request.resource.name.matches('users/' + uid + '/apps/[^/]+/images/[^/]+/v\\d+\\.(webp|png|jpe?g)') ||
+          request.resource.name.matches('users/' + uid + '/apps/[^/]+/thumbs/[^/]+/v\\d+\\.webp')
+        );
+    }
+
+    // Backups — apenas service account (Function com custom claim)
+    match /backups/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider == "custom"
+        && request.auth.token.role == "service";
+    }
+  }
+}
+
+Autenticação
+
+Trocar auth caseira por Firebase Auth (email/senha, OAuth, etc.).
+
+No Next.js, use session cookies httpOnly (ou SDK server) para SSR seguro.
+
+App Check obrigatório no cliente; validar no backend.
+
+6) API (Next.js /app/api/images/*)
+
+Crie rotas server-only, com validação Zod:
+
+POST /api/images/request
+
+Body: { appId, datasetId, sourceData, tags?: string[] }
+
+Ação: cria doc pending (currentVersion=0, monthKey=now, sourceDataRef), retorna { imageId }.
+
+POST /api/images/generate
+
+Body: { imageId, evolve?: boolean }
+
+Ação: chama Cloud Function generateImage.
+
+GET /api/images/list?appId=&datasetId=&month=&pageSize=&cursor=
+
+Retorna paginação por updatedAt desc + signed URLs das thumbs.
+
+GET /api/images/{imageId}
+
+Retorna metadados + signed URLs (file.getSignedUrl) para a versão atual e thumb.
+
+POST /api/images/{imageId}/promote
+
+Body: { version: number } → marca currentVersion=version.
+
+DELETE /api/images/{imageId}
+
+Soft delete: define deletedAt (não remove arquivos).
+
+7) Cloud Functions (Node 20)
+
+Crie pasta functions/ com:
+
+generateImage (HTTP ou Pub/Sub):
+
+Input: { uid, appId, datasetId, imageId, evolve?: boolean }.
+
+Busca doc; se pending ou evolve=true, gera imagem via adapter:
+
+lib/images/adapter.ts com interface generateFromData(sourceData, opts).
+
+Default: usar pipeline existente (SVG → PNG → WEBP) com sharp.
+
+Gera thumb (ex.: 512px máx. dimension) e pHash.
+
+Escreve no Storage: v{n}.webp e thumbs/v{n}.webp.
+
+Atualiza Firestore: status="ready", currentVersion++, versions.push(...), updatedAt, monthKey.
+
+Se evolve e critérios não atingidos (ex.: bytes < targetBytes ou width < targetWidth), reencaminhar tarefa com exponential backoff (Pub/Sub).
+
+monthlyBackup (Cloud Scheduler diário):
+
+Para cada monthKey fechado, copia versões “estáveis” para /backups/{uid}/{appId}/{YYYY}/{MM}/.
+
+Exporta metadados images para JSON no GCS (opcional).
+
+8) UI – Sessão de Imagens Geradas
+
+Páginas novas:
+
+/console/images
+
+Filtros: datasetId, tag, monthKey.
+
+Grid com thumb, badge v{current}, botões: “Promover”, “Copiar URL”, “Metadados”.
+
+Paginação infinita (cursor/updatedAt desc).
+
+/console/images/[imageId]
+
+Timeline de versões com preview, metadados lado a lado, botão “Promover”.
+
+9) Observabilidade e custo
+
+Logs estruturados nas Functions (latência, bytes, versão).
+
+Métricas simples (contadores por status).
+
+Evite leituras amplas (sempre paginar).
+
+WebP por padrão; só PNG/JPEG quando necessário.
+
+URLs assinadas com expiração curta (ex.: 15 minutos).
+
+10) Estrutura de pastas a adicionar
+/app/api/images/request/route.ts
+/app/api/images/generate/route.ts
+/app/api/images/list/route.ts
+/app/api/images/[imageId]/route.ts
+/app/api/images/[imageId]/promote/route.ts
+/app/api/images/[imageId]/delete/route.ts   // opcional
+
+/console/images/page.tsx
+/console/images/[imageId]/page.tsx
+
+/lib/firebase.ts                // client & admin split separe
+/lib/images/adapter.ts          // interface e default impl
+/lib/images/phash.ts            // util pHash
+/lib/images/signedUrl.ts        // util de signed URL
+
+/functions/src/index.ts         // export das functions
+/functions/src/generateImage.ts
+/functions/src/monthlyBackup.ts
+
+/docs/images-pipeline.md        // documentação curta
+
+11) Critérios de evolução (“evolve”)
+
+Parâmetros (env): TARGET_WIDTH, TARGET_BYTES.
+
+Enquanto width < TARGET_WIDTH OU bytes < TARGET_BYTES, gerar nova versão (v+1).
+
+Máximo de tentativas por imagem: MAX_EVOLVE_ROUNDS.
+
+Parar no primeiro que atender ambos os critérios.
+
+12) Testes e emuladores
+
+Unit (Zod, utils de pHash, signed URLs — mock).
+
+Integração com emuladores: fluxo request → generateImage → Firestore/Storage → list.
+
+Seeds locais: 3 imagens fake com versões v1..v3.
+
+Scripts:
+
+dev (Next + emuladores),
+
+emulators (Firestore/Storage/Functions),
+
+deploy (Hosting + Functions).
+
+13) Arquivos obrigatórios a entregar (DoD)
+
+Código das rotas /api/images/* completo com validação Zod.
+
+Functions generateImage e monthlyBackup.
+
+Rules atualizadas (Firestore/Storage) aplicadas.
+
+UI /console/images e /console/images/[imageId] funcionando em dev (lista, filtro, paginação, promover versão).
+
+Assinatura de URLs no backend (sem makePublic).
+
+Documentação /docs/images-pipeline.md cobrindo:
+
+Fluxo end-to-end, índices, variáveis de ambiente, como rodar emuladores e deploy.
+
+Check-list de segurança:
+
+Firebase Auth ativo (session cookie httpOnly),
+
+App Check requisitado no cliente,
+
+Rotas server-only protegidas,
+
+Rate limiting simples na geração.
+
+14) Variáveis de ambiente (exemplo)
+
+FIREBASE_PROJECT_ID
+
+FIREBASE_CLIENT_EMAIL
+
+FIREBASE_PRIVATE_KEY
+
+FIREBASE_STORAGE_BUCKET
+
+TARGET_WIDTH=2048
+
+TARGET_BYTES=1200000
+
+MAX_EVOLVE_ROUNDS=3
+
+15) Aceitação (test manual)
+
+Criar request com dados arbitrários → retorna imageId.
+
+Chamar /api/images/generate (evolve=true) → aguardar pronto.
+
+Ver /console/images: imagem aparece com thumb, v{n} correto.
+
+Acessar detalhe → ver versões, copiar URL assinada, promover uma versão.
+
+Conferir arquivos no Storage (images + thumbs) e doc no Firestore (versions[] completo).
+
+Rodar monthlyBackup em emulador → arquivos copiados para /backups/{uid}/{appId}/{YYYY}/{MM}/.
+
+Implemente tudo acima neste repositório preservando o que já existe. Faça refactors necessários, garanta tipagem estrita, validação de entradas e tratamento de erros. Ao concluir, gere um resumo das mudanças e como rodar localmente (emuladores) e deploy.
