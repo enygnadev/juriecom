@@ -1,36 +1,18 @@
-import { doc, getDoc, setDoc } from "firebase/firestore"
-import { getDb } from "./firestore"
-
-const SETTINGS_DOC = "settings/store"
+import { db } from "@/lib/db";
 
 export async function getSettings() {
   try {
-    const db = getDb()
-    const docRef = doc(db, SETTINGS_DOC)
-    const docSnap = await getDoc(docRef)
-
-    if (docSnap.exists()) {
-      return docSnap.data()
-    }
-
-    return null
+    return await db.getDoc("settings", "general");
   } catch (error) {
-    console.error("Error getting settings:", error)
-    return null
+    console.error("Error getting settings:", error);
+    return null;
   }
 }
 
-export async function updateSettings(settings: any): Promise<boolean> {
+export async function setSettings(settings: any) {
   try {
-    const db = getDb()
-    const docRef = doc(db, SETTINGS_DOC)
-    await setDoc(docRef, {
-      ...settings,
-      updatedAt: new Date()
-    }, { merge: true })
-    return true
+    await db.set("settings", "general", settings);
   } catch (error) {
-    console.error("Error updating settings:", error)
-    return false
+    console.error("Error setting settings:", error);
   }
 }
