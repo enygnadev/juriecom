@@ -9,7 +9,7 @@ packages = ["firebase-tools"]
 run = ["sh", "-c", "npm run dev -- --port 3000"]
 
 [workflows]
-runButton = "Project"
+runButton = "Development"
 
 [[workflows.workflow]]
 name = "Development"
