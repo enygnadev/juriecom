@@ -1,34 +1,27 @@
-import { getFirestore } from "firebase/firestore"
-import { getStorage } from "firebase/storage"
-import { app } from "./config" // ✅ Corrigido aqui
 
-// Initialize Firestore and Storage only when needed
-let db: any = null
-let storage: any = null
+import { db } from "@/lib/db";
 
-export function getDb() {
-  if (!db) {
-    db = getFirestore(app)
-  }
-  return db
-}
-
-export function getStorageInstance() {
-  if (!storage) {
-    storage = getStorage(app)
-  }
-  return storage
-}
-
-// Export for backward compatibility
-export { getDb as db, getStorageInstance as storage }
+export const getDb = () => db;
 
 export const createDocument = async (collectionName: string, data: Record<string, unknown>): Promise<string> => {
-  // Placeholder for actual implementation
-  return Promise.resolve("");
+  return await db.add(collectionName, data);
 }
 
 export const updateDocument = async (collectionName: string, docId: string, data: Record<string, unknown>): Promise<void> => {
-  // Placeholder for actual implementation
-  return Promise.resolve();
+  await db.update(collectionName, docId, data);
 }
+
+export const getDocument = async (collectionName: string, docId: string) => {
+  return await db.getDoc(collectionName, docId);
+}
+
+export const listDocuments = async (collectionName: string, options?: any) => {
+  return await db.list(collectionName, options);
+}
+
+export const deleteDocument = async (collectionName: string, docId: string): Promise<void> => {
+  await db.remove(collectionName, docId);
+}
+
+// Export for backward compatibility
+export { db };
