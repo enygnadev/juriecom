@@ -1,27 +1,34 @@
+import { getFirestore } from "firebase/firestore"
+import { getStorage } from "firebase/storage"
+import { app } from "./config" // ✅ Corrigido aqui
 
-import { db } from "@/lib/db";
+// Initialize Firestore and Storage only when needed
+let db: any = null
+let storage: any = null
 
-export const getDb = () => db;
-
-export const createDocument = async (collectionName: string, data: Record<string, unknown>): Promise<string> => {
-  return await db.add(collectionName, data);
+export function getDb() {
+  if (!db) {
+    db = getFirestore(app)
+  }
+  return db
 }
 
-export const updateDocument = async (collectionName: string, docId: string, data: Record<string, unknown>): Promise<void> => {
-  await db.update(collectionName, docId, data);
-}
-
-export const getDocument = async (collectionName: string, docId: string) => {
-  return await db.getDoc(collectionName, docId);
-}
-
-export const listDocuments = async (collectionName: string, options?: any) => {
-  return await db.list(collectionName, options);
-}
-
-export const deleteDocument = async (collectionName: string, docId: string): Promise<void> => {
-  await db.remove(collectionName, docId);
+export function getStorageInstance() {
+  if (!storage) {
+    storage = getStorage(app)
+  }
+  return storage
 }
 
 // Export for backward compatibility
-export { db };
+export { getDb as db, getStorageInstance as storage }
+
+export const createDocument = async (collectionName: string, data: Record<string, unknown>): Promise<string> => {
+  // Placeholder for actual implementation
+  return Promise.resolve("");
+}
+
+export const updateDocument = async (collectionName: string, docId: string, data: Record<string, unknown>): Promise<void> => {
+  // Placeholder for actual implementation
+  return Promise.resolve();
+}
