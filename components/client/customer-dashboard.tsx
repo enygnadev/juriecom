@@ -849,8 +849,8 @@ export function CustomerDashboard() {
                           <Separator />
 
                           <div>
-                            <h4 className="font-medium mb-2">Itens ({order.items.length})</h4>
-                            {order.items.slice(0, 2).map((item, index) => (
+                            <h4 className="font-medium mb-2">Itens ({Array.isArray(order.items) ? order.items.length : 0})</h4>
+                            {Array.isArray(order.items) && order.items.slice(0, 2).map((item, index) => (
                               <div key={index} className="flex justify-between items-center py-1">
                                 <span className="text-sm">
                                   {item.title || item.name} x {item.quantity}
@@ -860,7 +860,7 @@ export function CustomerDashboard() {
                                 </span>
                               </div>
                             ))}
-                            {order.items.length > 2 && (
+                            {Array.isArray(order.items) && order.items.length > 2 && (
                               <p className="text-sm text-muted-foreground">
                                 +{order.items.length - 2} item(s) adicionais
                               </p>
@@ -1789,7 +1789,7 @@ export function CustomerDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    {selectedOrderDetails.items.map((item, index) => {
+                    {Array.isArray(selectedOrderDetails.items) && selectedOrderDetails.items.map((item, index) => {
                       const requiredDocuments = getDocumentsForCartItem(item)
                       
                       return (
