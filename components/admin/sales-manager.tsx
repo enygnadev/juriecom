@@ -33,14 +33,19 @@ export function SalesManager() {
 
   const getTotalRevenue = () => {
     return getDeliveredOrders().reduce((total, order) => {
-      return total + (order.total || 0)
+      const orderTotal = order.total || (order as any).totalPrice || 0
+      console.log('📊 Calculando receita - Pedido:', order.id, 'Total:', orderTotal)
+      return total + orderTotal
     }, 0)
   }
 
   const getPendingRevenue = () => {
     return orders
       .filter(order => ['pending', 'processing', 'shipped'].includes(order.status))
-      .reduce((total, order) => total + (order.total || 0), 0)
+      .reduce((total, order) => {
+        const orderTotal = order.total || (order as any).totalPrice || 0
+        return total + orderTotal
+      }, 0)
   }
 
   const getTotalOrders = () => {
@@ -125,7 +130,7 @@ export function SalesManager() {
           <CardContent>
             <div className="text-2xl font-bold">
               R$ {getDeliveredCount() > 0 
-                ? (totalRevenue / getDeliveredCount()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+                ? (totalRevenue / getDeliveredCount()).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                 : '0,00'
               }
             </div>
@@ -160,7 +165,7 @@ export function SalesManager() {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-green-600">
-                      R$ {(order.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {((order.total || (order as any).totalPrice || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {Array.isArray(order.items) ? order.items.length : 0} {Array.isArray(order.items) && order.items.length === 1 ? 'item' : 'itens'}
