@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings } from "lucide-react"
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings, DollarSign } from "lucide-react"
 
 const sidebarItems = [
   {
@@ -12,14 +12,19 @@ const sidebarItems = [
     icon: LayoutDashboard,
   },
   {
-    title: "Produtos",
-    href: "/admin/products",
-    icon: Package,
-  },
-  {
     title: "Pedidos",
     href: "/admin/orders",
     icon: ShoppingCart,
+  },
+  {
+    title: "Vendas",
+    href: "/admin/sales",
+    icon: DollarSign,
+  },
+  {
+    title: "Produtos",
+    href: "/admin/products",
+    icon: Package,
   },
   {
     title: "Usuários",

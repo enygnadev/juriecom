@@ -45,11 +45,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const ordersSnapshot = await getDocs(ordersQuery)
     const totalOrders = ordersSnapshot.size
 
-    // Calculate total revenue
+    // Calculate total revenue (only delivered orders)
     let totalRevenue = 0
     ordersSnapshot.docs.forEach(doc => {
       const data = doc.data()
-      if (data.total && typeof data.total === 'number') {
+      if (data.total && typeof data.total === 'number' && data.status === 'delivered') {
         totalRevenue += data.total
       }
     })
