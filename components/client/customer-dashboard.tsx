@@ -500,6 +500,45 @@ export function CustomerDashboard() {
     return numbers.replace(/(\d{5})(\d{3})/, '$1-$2')
   }
 
+  const fetchAddressByCEP = async (cep: string) => {
+    const cleanCEP = cep.replace(/\D/g, '')
+    if (cleanCEP.length !== 8) return
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCEP}/json/`)
+      const data = await response.json()
+      
+      if (!data.erro) {
+        setNewAddress(prev => ({
+          ...prev,
+          street: data.logradouro || prev.street,
+          neighborhood: data.bairro || prev.neighborhood,
+          city: data.localidade || prev.city,
+          state: data.uf || prev.state,
+          zipCode: formatCEP(cleanCEP)
+        }))
+        
+        toast({
+          title: "Endereço encontrado",
+          description: "Dados preenchidos automaticamente. Você pode editá-los se necessário."
+        })
+      } else {
+        toast({
+          title: "CEP não encontrado",
+          description: "Verifique o CEP digitado e tente novamente.",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Erro ao buscar CEP:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao buscar endereço. Tente novamente.",
+        variant: "destructive"
+      })
+    }
+  }
+
   const handleDocumentUpload = async (orderId: string, productId: string, documentName: string, file: File) => {
     if (!user) return
 
@@ -1102,18 +1141,50 @@ export function CustomerDashboard() {
                         />
                       </div>
                       
-                      <div>
+                      <div className="md:col-span-2">
                         <Label htmlFor="addressZip">CEP *</Label>
-                        <Input
-                          id="addressZip"
-                          value={newAddress.zipCode || ''}
-                          onChange={(e) => setNewAddress({...newAddress, zipCode: formatCEP(e.target.value)})}
-                          placeholder="00000-000"
-                          maxLength={9}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            id="addressZip"
+                            value={newAddress.zipCode || ''}
+                            onChange={(e) => {
+                              const formatted = formatCEP(e.target.value)
+                              setNewAddress({...newAddress, zipCode: formatted})
+                            }}
+                            onBlur={(e) => {
+                              const cleanCEP = e.target.value.replace(/\D/g, '')
+                              if (cleanCEP.length === 8) {
+                                fetchAddressByCEP(cleanCEP)
+                              }
+                            }}
+                            placeholder="00000-000"
+                            maxLength={9}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              const cleanCEP = newAddress.zipCode?.replace(/\D/g, '') || ''
+                              if (cleanCEP.length === 8) {
+                                fetchAddressByCEP(cleanCEP)
+                              } else {
+                                toast({
+                                  title: "CEP inválido",
+                                  description: "Digite um CEP válido com 8 dígitos.",
+                                  variant: "destructive"
+                                })
+                              }
+                            }}
+                          >
+                            Buscar
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Digite o CEP e clique em Buscar ou pressione Tab para preencher automaticamente
+                        </p>
                       </div>
                       
-                      <div>
+                      <div className="md:col-span-2">
                         <Label htmlFor="addressStreet">Rua *</Label>
                         <Input
                           id="addressStreet"
@@ -1173,13 +1244,33 @@ export function CustomerDashboard() {
                             <SelectValue placeholder="Selecione" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="SP">São Paulo</SelectItem>
-                            <SelectItem value="RJ">Rio de Janeiro</SelectItem>
+                            <SelectItem value="AC">Acre</SelectItem>
+                            <SelectItem value="AL">Alagoas</SelectItem>
+                            <SelectItem value="AP">Amapá</SelectItem>
+                            <SelectItem value="AM">Amazonas</SelectItem>
+                            <SelectItem value="BA">Bahia</SelectItem>
+                            <SelectItem value="CE">Ceará</SelectItem>
+                            <SelectItem value="DF">Distrito Federal</SelectItem>
+                            <SelectItem value="ES">Espírito Santo</SelectItem>
+                            <SelectItem value="GO">Goiás</SelectItem>
+                            <SelectItem value="MA">Maranhão</SelectItem>
+                            <SelectItem value="MT">Mato Grosso</SelectItem>
+                            <SelectItem value="MS">Mato Grosso do Sul</SelectItem>
                             <SelectItem value="MG">Minas Gerais</SelectItem>
-                            <SelectItem value="RS">Rio Grande do Sul</SelectItem>
+                            <SelectItem value="PA">Pará</SelectItem>
+                            <SelectItem value="PB">Paraíba</SelectItem>
                             <SelectItem value="PR">Paraná</SelectItem>
+                            <SelectItem value="PE">Pernambuco</SelectItem>
+                            <SelectItem value="PI">Piauí</SelectItem>
+                            <SelectItem value="RJ">Rio de Janeiro</SelectItem>
+                            <SelectItem value="RN">Rio Grande do Norte</SelectItem>
+                            <SelectItem value="RS">Rio Grande do Sul</SelectItem>
+                            <SelectItem value="RO">Rondônia</SelectItem>
+                            <SelectItem value="RR">Roraima</SelectItem>
                             <SelectItem value="SC">Santa Catarina</SelectItem>
-                            {/* Adicionar outros estados */}
+                            <SelectItem value="SP">São Paulo</SelectItem>
+                            <SelectItem value="SE">Sergipe</SelectItem>
+                            <SelectItem value="TO">Tocantins</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
