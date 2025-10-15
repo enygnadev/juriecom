@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { CheckCircle, XCircle, Clock, Package, User, MapPin, CreditCard, Calendar, Phone, Mail } from "lucide-react"
+import { CheckCircle, XCircle, Clock, Package, User, MapPin, CreditCard, Calendar, Phone, Mail, File } from "lucide-react"
+import { getDocumentsForCartItem } from "@/lib/product-templates"
 import type { Order } from "@/lib/types"
 
 interface OrderDetailsModalProps {
@@ -56,49 +57,33 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
     return methods[method as keyof typeof methods] || "Não informado"
   }
 
-  // Placeholder function - Replace with actual logic to get documents for an item
-  const getDocumentsForCartItem = (item: any) => {
-    // Example: Based on item title or ID, return a list of required document names
-    if (item.title?.includes("Autorização de Representante")) {
-      return [
-        "RG e CPF do representante",
-        "RG e CPF do representado",
-        "Comprovante de endereço de ambos",
-        "Procuração específica",
-        "Objeto específico da representação",
-        "Declaração de capacidade civil",
-        "Reconhecimento de firma",
-        "Substabelecimento (se aplicável)"
-      ]
-    }
-    // Add more conditions for other item types if needed
-    return []
-  }
-
-  // Placeholder function - Replace with actual logic to get document status for an item
   const getDocumentStatus = (item: any, documentName: string) => {
-    // Example: Check if the document is uploaded for this item.
-    // In a real app, this data would come from the order or item details.
-    // For demonstration, we'll simulate some status.
-    const mockStatus = {
-      "RG e CPF do representante": { uploaded: true, url: "http://example.com/doc1.pdf" },
-      "RG e CPF do representado": { uploaded: true, url: "http://example.com/doc2.pdf" },
-      "Comprovante de endereço de ambos": { uploaded: false },
-      "Procuração específica": { uploaded: true, url: "http://example.com/doc4.pdf" },
-      "Objeto específico da representação": { uploaded: false },
-      "Declaração de capacidade civil": { uploaded: false },
-      "Reconhecimento de firma": { uploaded: false },
-      "Substabelecimento (se aplicável)": { uploaded: false },
-    }
-    
-    const status = mockStatus[documentName as keyof typeof mockStatus] || { uploaded: false }
-
-    // Simulate a URL for uploaded documents for demo purposes
-    if (status.uploaded && !status.url) {
-      status.url = `http://example.com/sample-doc-${documentName.replace(/\s+/g, '-').toLowerCase()}.pdf`
+    // Buscar o item correspondente ao productId
+    const documents = (item as any).documents
+    if (documents && Array.isArray(documents)) {
+      const doc = documents.find((d: any) => d.name === documentName)
+      if (doc && doc.url) {
+        return {
+          uploaded: true,
+          url: doc.url,
+          fileName: doc.name,
+          uploadedAt: doc.uploadedAt
+        }
+      }
     }
 
-    return status
+    // Verificar formato alternativo (objeto com chaves)
+    const orderDocuments = (order as any).documents
+    if (orderDocuments?.[item.id]?.[documentName]) {
+      return {
+        uploaded: true,
+        url: orderDocuments[item.id][documentName].url,
+        fileName: orderDocuments[item.id][documentName].fileName,
+        uploadedAt: orderDocuments[item.id][documentName].uploadedAt
+      }
+    }
+
+    return { uploaded: false }
   }
 
   return (
@@ -271,7 +256,10 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
                               </div>
                             </div>
                           ) : (
-                            <p className="text-sm text-muted-foreground py-2">Nenhum documento necessário para este item.</p>
+                            <div className="text-center py-4 text-muted-foreground">
+                              <File className="w-8 h-8 mx-auto mb-2" />
+                              <p className="text-sm">Nenhum documento necessário para este item</p>
+                            </div>
                           )}
                         </AccordionContent>
                       </AccordionItem>
