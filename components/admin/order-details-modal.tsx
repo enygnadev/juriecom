@@ -292,21 +292,33 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>R$ {((order.total || 0) - (order.shippingFee || 0)).toFixed(2)}</span>
-                </div>
-                {order.shippingFee && order.shippingFee > 0 && (
-                  <div className="flex justify-between">
-                    <span>Frete:</span>
-                    <span>R$ {(order.shippingFee || 0).toFixed(2)}</span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total:</span>
-                  <span>R$ {(order.total || 0).toFixed(2)}</span>
-                </div>
+                {(() => {
+                  const itemsTotal = Array.isArray(order.items) 
+                    ? order.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0)
+                    : 0
+                  const calculatedTotal = (order.total && order.total > 0) ? order.total : itemsTotal
+                  const subtotal = calculatedTotal - (order.shippingFee || 0)
+                  
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>R$ {subtotal.toFixed(2)}</span>
+                      </div>
+                      {order.shippingFee && order.shippingFee > 0 && (
+                        <div className="flex justify-between">
+                          <span>Frete:</span>
+                          <span>R$ {(order.shippingFee || 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <Separator />
+                      <div className="flex justify-between font-bold text-lg">
+                        <span>Total:</span>
+                        <span>R$ {calculatedTotal.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             </CardContent>
           </Card>

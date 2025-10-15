@@ -123,7 +123,13 @@ export function OrdersManager() {
 
                 <div className="flex justify-between items-center font-bold">
                   <span>Total:</span>
-                  <span>R$ {(order.total || 0).toFixed(2)}</span>
+                  <span>R$ {
+                    (order.total && order.total > 0) 
+                      ? order.total.toFixed(2)
+                      : Array.isArray(order.items) 
+                        ? order.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0).toFixed(2)
+                        : '0.00'
+                  }</span>
                 </div>
 
                 <div className="flex justify-between items-center">
