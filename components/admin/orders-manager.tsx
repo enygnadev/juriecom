@@ -84,6 +84,7 @@ export function OrdersManager() {
       processing: { label: "Processando", color: "bg-blue-500" },
       shipped: { label: "Enviado", color: "bg-purple-500" },
       delivered: { label: "Entregue", color: "bg-green-500" },
+      finalizado: { label: "Finalizado", color: "bg-emerald-600" },
       cancelled: { label: "Cancelado", color: "bg-red-500" }
     }
 
@@ -113,6 +114,7 @@ export function OrdersManager() {
             <SelectItem value="processing">Processando</SelectItem>
             <SelectItem value="shipped">Enviados</SelectItem>
             <SelectItem value="delivered">Entregues</SelectItem>
+            <SelectItem value="finalizado">Finalizados</SelectItem>
             <SelectItem value="cancelled">Cancelados</SelectItem>
           </SelectContent>
         </Select>
@@ -172,6 +174,7 @@ export function OrdersManager() {
                       <SelectItem value="processing">Processando</SelectItem>
                       <SelectItem value="shipped">Enviado</SelectItem>
                       <SelectItem value="delivered">Entregue</SelectItem>
+                      <SelectItem value="finalizado">Finalizado</SelectItem>
                       <SelectItem value="cancelled">Cancelado</SelectItem>
                     </SelectContent>
                   </Select>

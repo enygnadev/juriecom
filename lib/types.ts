@@ -42,7 +42,7 @@ export interface Order {
   items: CartItem[]
   total: number
   shippingFee?: number
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled'
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'finalizado' | 'cancelled'
   customerInfo: {
     name: string
     email: string

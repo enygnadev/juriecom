@@ -37,6 +37,7 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
       processing: { label: "Processando", color: "bg-blue-500" },
       shipped: { label: "Enviado", color: "bg-purple-500" },
       delivered: { label: "Entregue", color: "bg-green-500" },
+      finalizado: { label: "Finalizado", color: "bg-emerald-600" },
       cancelled: { label: "Cancelado", color: "bg-red-500" }
     }
 
@@ -204,6 +205,7 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
                         <SelectItem value="processing">Processando</SelectItem>
                         <SelectItem value="shipped">Enviado</SelectItem>
                         <SelectItem value="delivered">Entregue</SelectItem>
+                        <SelectItem value="finalizado">Finalizado</SelectItem>
                         <SelectItem value="cancelled">Cancelado</SelectItem>
                       </SelectContent>
                     </Select>

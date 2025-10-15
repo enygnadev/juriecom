@@ -28,7 +28,7 @@ export function SalesManager() {
   }
 
   const getDeliveredOrders = () => {
-    return orders.filter(order => order.status === 'delivered')
+    return orders.filter(order => order.status === 'delivered' || order.status === 'finalizado')
   }
 
   const getTotalRevenue = () => {
@@ -62,6 +62,7 @@ export function SalesManager() {
       processing: { label: "Processando", color: "bg-blue-500" },
       shipped: { label: "Enviado", color: "bg-purple-500" },
       delivered: { label: "Entregue", color: "bg-green-500" },
+      finalizado: { label: "Finalizado", color: "bg-emerald-600" },
       cancelled: { label: "Cancelado", color: "bg-red-500" }
     }
 

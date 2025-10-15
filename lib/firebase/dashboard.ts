@@ -49,7 +49,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     let totalRevenue = 0
     ordersSnapshot.docs.forEach(doc => {
       const data = doc.data()
-      if (data.status === 'delivered') {
+      if (data.status === 'delivered' || data.status === 'finalizado') {
         const orderTotal = data.total || data.totalPrice || 0
         if (typeof orderTotal === 'number') {
           totalRevenue += orderTotal

@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -147,7 +146,7 @@ export function CustomerDashboard() {
   const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false)
   const [uploadingDocuments, setUploadingDocuments] = useState<{[key: string]: boolean}>({})
   const [orderDocuments, setOrderDocuments] = useState<{[orderId: string]: {[productId: string]: {[document: string]: string}}}>({})
-  
+
   const [profile, setProfile] = useState<UserProfile>({
     displayName: user?.displayName || "",
     email: user?.email || "",
@@ -182,7 +181,7 @@ export function CustomerDashboard() {
     try {
       console.log("🔄 Iniciando carregamento de dados para:", user.uid)
       setLoading(true)
-      
+
       const [userOrders, userAddresses, userPaymentMethods, userWishlist] = await Promise.all([
         getOrdersByUser(user.uid),
         getUserAddresses(user.uid),
@@ -238,7 +237,7 @@ export function CustomerDashboard() {
         console.log("🔄 Executando reload...")
         loadUserData()
       }, 3000)
-      
+
       return () => clearTimeout(timeout)
     }
   }, [loading, user, orders.length])
@@ -252,7 +251,7 @@ export function CustomerDashboard() {
         ...profile,
         updatedAt: new Date()
       })
-      
+
       toast({
         title: "Sucesso",
         description: "Perfil atualizado com sucesso!"
@@ -441,7 +440,7 @@ export function CustomerDashboard() {
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        
+
         toast({
           title: "Sucesso",
           description: "Seus dados foram exportados com sucesso!"
@@ -507,7 +506,7 @@ export function CustomerDashboard() {
     try {
       const response = await fetch(`https://viacep.com.br/ws/${cleanCEP}/json/`)
       const data = await response.json()
-      
+
       if (!data.erro) {
         setNewAddress(prev => ({
           ...prev,
@@ -517,7 +516,7 @@ export function CustomerDashboard() {
           state: data.uf || prev.state,
           zipCode: formatCEP(cleanCEP)
         }))
-        
+
         toast({
           title: "Endereço encontrado",
           description: "Dados preenchidos automaticamente. Você pode editá-los se necessário."
@@ -554,15 +553,15 @@ export function CustomerDashboard() {
       // Encontrar o item no pedido
       const order = orders.find(o => o.id === orderId)
       const itemIndex = order?.items.findIndex(item => item.id === productId || item.productId === productId)
-      
+
       if (order && itemIndex !== undefined && itemIndex >= 0) {
         // Buscar documentos existentes do item
         const currentItem = order.items[itemIndex]
         const currentDocuments = (currentItem as any).documents || []
-        
+
         // Encontrar ou criar o documento
         const docIndex = currentDocuments.findIndex((d: any) => d.name === documentName)
-        
+
         if (docIndex >= 0) {
           // Atualizar documento existente
           currentDocuments[docIndex] = {
@@ -578,7 +577,7 @@ export function CustomerDashboard() {
             uploadedAt: new Date()
           })
         }
-        
+
         // Atualizar no Firestore
         const orderRef = doc(db, 'orders', orderId)
         await updateDoc(orderRef, {
@@ -663,6 +662,7 @@ export function CustomerDashboard() {
       processing: { label: "Processando", color: "bg-blue-500", icon: Package },
       shipped: { label: "Enviado", color: "bg-purple-500", icon: Truck },
       delivered: { label: "Entregue", color: "bg-green-500", icon: CheckCircle },
+      finalizado: { label: "Finalizado", color: "bg-emerald-600" },
       cancelled: { label: "Cancelado", color: "bg-red-500", icon: XCircle }
     }
 
@@ -683,6 +683,7 @@ export function CustomerDashboard() {
       processing: 50,
       shipped: 75,
       delivered: 100,
+      finalizado: 100,
       cancelled: 0
     }
     return progressMap[status as keyof typeof progressMap] || 0
@@ -696,7 +697,7 @@ export function CustomerDashboard() {
 
   const getOrderStats = () => {
     const totalOrders = orders.length
-    const completedOrders = orders.filter(order => order.status === 'delivered').length
+    const completedOrders = orders.filter(order => order.status === 'delivered' || order.status === 'finalizado').length
     const cancelledOrders = orders.filter(order => order.status === 'cancelled').length
     const pendingOrders = orders.filter(order => 
       ['pending', 'processing', 'shipped'].includes(order.status)
@@ -1009,7 +1010,7 @@ export function CustomerDashboard() {
                       })}
                     />
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Notificações por SMS</p>
@@ -1025,7 +1026,7 @@ export function CustomerDashboard() {
                       })}
                     />
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Notificações por E-mail</p>
@@ -1041,7 +1042,7 @@ export function CustomerDashboard() {
                       })}
                     />
                   </div>
-                  
+
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Comunicações de Marketing</p>
@@ -1119,7 +1120,7 @@ export function CustomerDashboard() {
                         Adicione um novo endereço de entrega
                       </DialogDescription>
                     </DialogHeader>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="md:col-span-2">
                         <Label htmlFor="addressLabel">Nome do Endereço *</Label>
@@ -1130,7 +1131,7 @@ export function CustomerDashboard() {
                           placeholder="Ex: Casa, Trabalho, Casa dos Pais"
                         />
                       </div>
-                      
+
                       <div className="md:col-span-2">
                         <Label htmlFor="addressName">Nome do Destinatário *</Label>
                         <Input
@@ -1140,7 +1141,7 @@ export function CustomerDashboard() {
                           placeholder="Nome completo de quem vai receber"
                         />
                       </div>
-                      
+
                       <div className="md:col-span-2">
                         <Label htmlFor="addressZip">CEP *</Label>
                         <div className="flex gap-2">
@@ -1183,7 +1184,7 @@ export function CustomerDashboard() {
                           Digite o CEP e clique em Buscar ou pressione Tab para preencher automaticamente
                         </p>
                       </div>
-                      
+
                       <div className="md:col-span-2">
                         <Label htmlFor="addressStreet">Rua *</Label>
                         <Input
@@ -1193,7 +1194,7 @@ export function CustomerDashboard() {
                           placeholder="Nome da rua"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="addressNumber">Número *</Label>
                         <Input
@@ -1203,7 +1204,7 @@ export function CustomerDashboard() {
                           placeholder="123"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="addressComplement">Complemento</Label>
                         <Input
@@ -1213,7 +1214,7 @@ export function CustomerDashboard() {
                           placeholder="Apto, Bloco, etc."
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="addressNeighborhood">Bairro *</Label>
                         <Input
@@ -1223,7 +1224,7 @@ export function CustomerDashboard() {
                           placeholder="Nome do bairro"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="addressCity">Cidade *</Label>
                         <Input
@@ -1233,7 +1234,7 @@ export function CustomerDashboard() {
                           placeholder="Nome da cidade"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="addressState">Estado *</Label>
                         <Select 
@@ -1274,7 +1275,7 @@ export function CustomerDashboard() {
                           </SelectContent>
                         </Select>
                       </div>
-                      
+
                       <div className="md:col-span-2 flex items-center space-x-2">
                         <Switch
                           id="isDefault"
@@ -1284,7 +1285,7 @@ export function CustomerDashboard() {
                         <Label htmlFor="isDefault">Definir como endereço padrão</Label>
                       </div>
                     </div>
-                    
+
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setShowAddressDialog(false)}>
                         Cancelar
@@ -1388,7 +1389,7 @@ export function CustomerDashboard() {
                         Adicione um novo cartão de crédito ou débito
                       </DialogDescription>
                     </DialogHeader>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <Label htmlFor="cardType">Tipo do Cartão</Label>
@@ -1407,7 +1408,7 @@ export function CustomerDashboard() {
                           </SelectContent>
                         </Select>
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="cardNumber">Número do Cartão *</Label>
                         <Input
@@ -1424,7 +1425,7 @@ export function CustomerDashboard() {
                           Apenas os últimos 4 dígitos serão armazenados
                         </p>
                       </div>
-                      
+
                       <div>
                         <Label htmlFor="holderName">Nome no Cartão *</Label>
                         <Input
@@ -1434,7 +1435,7 @@ export function CustomerDashboard() {
                           placeholder="Nome como está no cartão"
                         />
                       </div>
-                      
+
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <Label htmlFor="expiryMonth">Mês</Label>
@@ -1454,7 +1455,7 @@ export function CustomerDashboard() {
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div>
                           <Label htmlFor="expiryYear">Ano</Label>
                           <Select 
@@ -1476,7 +1477,7 @@ export function CustomerDashboard() {
                             </SelectContent>
                           </Select>
                         </div>
-                        
+
                         <div>
                           <Label htmlFor="cvv">CVV</Label>
                           <Input
@@ -1491,7 +1492,7 @@ export function CustomerDashboard() {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="isDefaultPayment"
@@ -1501,7 +1502,7 @@ export function CustomerDashboard() {
                         <Label htmlFor="isDefaultPayment">Definir como método padrão</Label>
                       </div>
                     </div>
-                    
+
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>
                         Cancelar
@@ -1575,7 +1576,7 @@ export function CustomerDashboard() {
                   ))}
                 </div>
               )}
-              
+
               <Alert className="mt-4">
                 <Shield className="h-4 w-4" />
                 <AlertDescription>
@@ -1715,7 +1716,7 @@ export function CustomerDashboard() {
                   Seus dados são protegidos conforme a Lei Geral de Proteção de Dados Pessoais (LGPD). 
                   Você tem direito ao acesso, correção, eliminação e portabilidade dos seus dados.
                 </p>
-                
+
                 <div className="space-y-3">
                   <Alert>
                     <UserCheck className="h-4 w-4" />
@@ -1730,13 +1731,13 @@ export function CustomerDashboard() {
                       </ul>
                     </AlertDescription>
                   </Alert>
-                  
+
                   <div className="flex gap-3">
                     <Button variant="outline" onClick={handleExportData}>
                       <Download className="w-4 h-4 mr-2" />
                       Exportar Meus Dados
                     </Button>
-                    
+
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button variant="destructive">
@@ -1754,7 +1755,7 @@ export function CustomerDashboard() {
                             Esta ação é irreversível. Todos os seus dados serão excluídos permanentemente, incluindo:
                           </DialogDescription>
                         </DialogHeader>
-                        
+
                         <div className="space-y-2">
                           <ul className="list-disc list-inside text-sm space-y-1">
                             <li>Informações pessoais e perfil</li>
@@ -1764,7 +1765,7 @@ export function CustomerDashboard() {
                             <li>Lista de desejos</li>
                             <li>Preferências de comunicação</li>
                           </ul>
-                          
+
                           <Alert className="mt-4">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertDescription>
@@ -1773,7 +1774,7 @@ export function CustomerDashboard() {
                             </AlertDescription>
                           </Alert>
                         </div>
-                        
+
                         <DialogFooter>
                           <Button variant="outline">Cancelar</Button>
                           <Button variant="destructive" onClick={handleDeleteAccount}>
@@ -1819,7 +1820,7 @@ export function CustomerDashboard() {
               {selectedOrderDetails && getStatusBadge(selectedOrderDetails.status)}
             </DialogTitle>
           </DialogHeader>
-          
+
           {selectedOrderDetails && (
             <div className="space-y-6">
               {/* Informações Gerais */}
@@ -1857,7 +1858,7 @@ export function CustomerDashboard() {
                       <p>{selectedOrderDetails.items.length} item(s)</p>
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium">Progresso do Pedido</span>
@@ -1882,7 +1883,7 @@ export function CustomerDashboard() {
                   <div className="space-y-6">
                     {Array.isArray(selectedOrderDetails.items) && selectedOrderDetails.items.map((item, index) => {
                       const requiredDocuments = getDocumentsForCartItem(item)
-                      
+
                       return (
                         <div key={index} className="border rounded-lg p-4">
                           <div className="flex justify-between items-start mb-4">
@@ -1920,7 +1921,7 @@ export function CustomerDashboard() {
                                           </Badge>
                                         )}
                                       </div>
-                                      
+
                                       <div className="flex items-center gap-2">
                                         {docStatus.uploaded ? (
                                           <>
@@ -2059,7 +2060,7 @@ export function CustomerDashboard() {
               )}
             </div>
           )}
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowOrderDetailsModal(false)}>
               <X className="w-4 h-4 mr-2" />
@@ -2110,7 +2111,7 @@ export function CustomerDashboard() {
                 Atualize as informações do endereço
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <Label htmlFor="editLabel">Nome do Endereço</Label>
@@ -2120,7 +2121,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, label: e.target.value})}
                 />
               </div>
-              
+
               <div className="md:col-span-2">
                 <Label htmlFor="editName">Nome do Destinatário</Label>
                 <Input
@@ -2129,7 +2130,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, name: e.target.value})}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editZip">CEP</Label>
                 <Input
@@ -2139,7 +2140,7 @@ export function CustomerDashboard() {
                   maxLength={9}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editStreet">Rua</Label>
                 <Input
@@ -2148,7 +2149,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, street: e.target.value})}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editNumber">Número</Label>
                 <Input
@@ -2157,7 +2158,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, number: e.target.value})}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editComplement">Complemento</Label>
                 <Input
@@ -2166,7 +2167,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, complement: e.target.value})}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editNeighborhood">Bairro</Label>
                 <Input
@@ -2175,7 +2176,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, neighborhood: e.target.value})}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editCity">Cidade</Label>
                 <Input
@@ -2184,7 +2185,7 @@ export function CustomerDashboard() {
                   onChange={(e) => setEditingAddress({...editingAddress, city: e.target.value})}
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="editState">Estado</Label>
                 <Select 
@@ -2204,7 +2205,7 @@ export function CustomerDashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Switch
                   id="editIsDefault"
@@ -2214,7 +2215,7 @@ export function CustomerDashboard() {
                 <Label htmlFor="editIsDefault">Definir como endereço padrão</Label>
               </div>
             </div>
-            
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditingAddress(null)}>
                 Cancelar
