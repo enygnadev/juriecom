@@ -110,12 +110,15 @@ export function OrdersManager() {
               <div className="space-y-4">
                 <div>
                   <h4 className="font-medium mb-2">Itens do Pedido:</h4>
-                  {(order.items || []).map((item, index) => (
+                  {Array.isArray(order.items) && order.items.map((item, index) => (
                     <div key={index} className="flex justify-between items-center py-2 border-b">
                       <span>{item.title || item.name || 'Item sem nome'} x {item.quantity || 1}</span>
                       <span>R$ {((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
                     </div>
                   ))}
+                  {!Array.isArray(order.items) && (
+                    <p className="text-sm text-muted-foreground">Nenhum item encontrado</p>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center font-bold">
