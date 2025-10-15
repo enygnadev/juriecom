@@ -8,8 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { CheckCircle, XCircle, Clock, Package, User, MapPin, CreditCard, Calendar, Phone, Mail, File } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { CheckCircle, XCircle, Clock, Package, User, MapPin, CreditCard, Calendar, Phone, Mail, File, Upload, Eye } from "lucide-react"
 import { getDocumentsForCartItem } from "@/lib/product-templates"
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { doc, updateDoc } from "firebase/firestore"
+import { getDb } from "@/lib/firebase/firestore"
+import { storage } from "@/lib/firebase/config"
+import { toast } from "@/hooks/use-toast"
 import type { Order } from "@/lib/types"
 
 interface OrderDetailsModalProps {
@@ -21,6 +27,7 @@ interface OrderDetailsModalProps {
 
 export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: OrderDetailsModalProps) {
   const [isUpdating, setIsUpdating] = useState(false)
+  const [uploadingDocuments, setUploadingDocuments] = useState<Record<string, boolean>>({})
 
   if (!order) return null
 
@@ -55,6 +62,72 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
       whatsapp: "WhatsApp"
     }
     return methods[method as keyof typeof methods] || "Não informado"
+  }
+
+  const handleDocumentUpload = async (orderId: string, productId: string, documentName: string, file: File) => {
+    const uploadKey = `${orderId}-${productId}-${documentName}`
+    setUploadingDocuments(prev => ({ ...prev, [uploadKey]: true }))
+
+    try {
+      // Upload do arquivo para o Firebase Storage
+      const storageRef = ref(storage, `orders/${orderId}/products/${productId}/${documentName}/${file.name}`)
+      await uploadBytes(storageRef, file)
+      const downloadURL = await getDownloadURL(storageRef)
+
+      // Encontrar o item no pedido
+      const itemIndex = order?.items.findIndex(item => item.id === productId || item.productId === productId)
+      
+      if (order && itemIndex !== undefined && itemIndex >= 0) {
+        // Buscar documentos existentes do item
+        const currentItem = order.items[itemIndex]
+        const currentDocuments = (currentItem as any).documents || []
+        
+        // Encontrar ou criar o documento
+        const docIndex = currentDocuments.findIndex((d: any) => d.name === documentName)
+        
+        if (docIndex >= 0) {
+          // Atualizar documento existente
+          currentDocuments[docIndex] = {
+            name: documentName,
+            url: downloadURL,
+            uploadedAt: new Date()
+          }
+        } else {
+          // Adicionar novo documento
+          currentDocuments.push({
+            name: documentName,
+            url: downloadURL,
+            uploadedAt: new Date()
+          })
+        }
+        
+        // Atualizar no Firestore
+        const db = getDb()
+        const orderRef = doc(db, 'orders', orderId)
+        await updateDoc(orderRef, {
+          [`items.${itemIndex}.documents`]: currentDocuments,
+          updatedAt: new Date()
+        })
+      }
+
+      toast({
+        title: "Sucesso",
+        description: `${documentName} enviado com sucesso!`
+      })
+
+      // Recarregar a página ou atualizar o estado
+      window.location.reload()
+
+    } catch (error) {
+      console.error("Erro ao fazer upload do documento:", error)
+      toast({
+        title: "Erro",
+        description: "Erro ao enviar documento. Tente novamente.",
+        variant: "destructive"
+      })
+    } finally {
+      setUploadingDocuments(prev => ({ ...prev, [uploadKey]: false }))
+    }
   }
 
   const getDocumentStatus = (item: any, documentName: string) => {
@@ -218,36 +291,110 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
                           {requiredDocuments.length > 0 ? (
                             <div className="pt-2 pb-4">
                               <h4 className="font-medium mb-3 text-sm">Documentos Necessários:</h4>
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {requiredDocuments.map((documentName: string, docIndex: number) => {
                                   const docStatus = getDocumentStatus(item, documentName)
+                                  const uploadKey = `${order.id}-${item.id}-${documentName}`
+                                  const isUploading = uploadingDocuments[uploadKey]
 
                                   return (
-                                    <div key={docIndex} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                                      <span className="text-sm">{documentName}</span>
+                                    <div key={docIndex} className="flex items-center justify-between p-3 border rounded">
                                       <div className="flex items-center gap-2">
+                                        <File className="w-4 h-4" />
+                                        <span className="text-sm font-medium">{documentName}</span>
                                         {docStatus.uploaded ? (
-                                          <>
-                                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-                                              <CheckCircle className="w-3 h-3 mr-1" />
-                                              Enviado
-                                            </Badge>
-                                            {docStatus.url && (
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => window.open(docStatus.url, '_blank')}
-                                                className="h-7 text-xs"
-                                              >
-                                                Ver arquivo
-                                              </Button>
-                                            )}
-                                          </>
+                                          <Badge variant="default" className="bg-green-500 text-white hover:bg-green-600">
+                                            <CheckCircle className="w-3 h-3 mr-1" />
+                                            Enviado
+                                          </Badge>
                                         ) : (
-                                          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
+                                          <Badge variant="destructive" className="bg-red-500 text-white hover:bg-red-600">
                                             <Clock className="w-3 h-3 mr-1" />
                                             Pendente
                                           </Badge>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2">
+                                        {docStatus.uploaded ? (
+                                          <>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => window.open(docStatus.url, '_blank')}
+                                            >
+                                              <Eye className="w-3 h-3 mr-1" />
+                                              Ver
+                                            </Button>
+                                            <div>
+                                              <Input
+                                                type="file"
+                                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                                onChange={(e) => {
+                                                  const file = e.target.files?.[0]
+                                                  if (file) {
+                                                    handleDocumentUpload(order.id, item.id, documentName, file)
+                                                  }
+                                                }}
+                                                className="hidden"
+                                                id={`upload-${uploadKey}`}
+                                                disabled={isUploading}
+                                              />
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => document.getElementById(`upload-${uploadKey}`)?.click()}
+                                                disabled={isUploading}
+                                              >
+                                                {isUploading ? (
+                                                  <>
+                                                    <Upload className="w-3 h-3 mr-1 animate-spin" />
+                                                    Enviando...
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <Upload className="w-3 h-3 mr-1" />
+                                                    Reenviar
+                                                  </>
+                                                )}
+                                              </Button>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div>
+                                            <Input
+                                              type="file"
+                                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                              onChange={(e) => {
+                                                const file = e.target.files?.[0]
+                                                if (file) {
+                                                  handleDocumentUpload(order.id, item.id, documentName, file)
+                                                }
+                                              }}
+                                              className="hidden"
+                                              id={`upload-${uploadKey}`}
+                                              disabled={isUploading}
+                                            />
+                                            <Button
+                                              variant={docStatus.uploaded ? "outline" : "default"}
+                                              size="sm"
+                                              onClick={() => document.getElementById(`upload-${uploadKey}`)?.click()}
+                                              disabled={isUploading}
+                                              className={docStatus.uploaded ? "border-green-500 text-green-600 hover:bg-green-50" : "bg-red-500 hover:bg-red-600 text-white"}
+                                            >
+                                              {isUploading ? (
+                                                <>
+                                                  <Upload className="w-3 h-3 mr-1 animate-spin" />
+                                                  Enviando...
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Clock className="w-3 h-3 mr-1" />
+                                                  Pendente
+                                                </>
+                                              )}
+                                            </Button>
+                                          </div>
                                         )}
                                       </div>
                                     </div>
