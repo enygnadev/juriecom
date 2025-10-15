@@ -8,6 +8,8 @@ import {
   query,
   orderBy,
   where,
+  deleteDoc, // Imported deleteDoc
+  Timestamp, // Added Timestamp for updateOrderStatus
 } from "firebase/firestore"
 import { getDb } from "./firestore"
 import type { Order } from "@/lib/types"
@@ -83,13 +85,25 @@ export async function updateOrderStatus(orderId: string, status: string): Promis
   try {
     const db = getDb()
     const docRef = doc(db, ORDERS_COLLECTION, orderId)
-    await updateDoc(docRef, { status })
+    await updateDoc(docRef, { status, updatedAt: Timestamp.now() }) // Added Timestamp.now()
     return true
   } catch (error) {
     console.error("Error updating order status:", error)
-    return false
+    throw error
   }
 }
+
+// Added deleteOrder function
+export async function deleteOrder(orderId: string) {
+  try {
+    const db = getDb()
+    await deleteDoc(doc(db, ORDERS_COLLECTION, orderId))
+  } catch (error) {
+    console.error("Error deleting order:", error)
+    throw error
+  }
+}
+
 
 export async function getOrdersByUser(userId: string): Promise<Order[]> {
   try {

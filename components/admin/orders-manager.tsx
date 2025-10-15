@@ -5,8 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Eye } from "lucide-react"
-import { getOrders, updateOrderStatus } from "@/lib/firebase/orders"
+import { Eye, Trash2 } from "lucide-react"
+import { getOrders, updateOrderStatus, deleteOrder } from "@/lib/firebase/orders"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { OrderDetailsModal } from "./order-details-modal"
 import type { Order } from "@/lib/types"
 
@@ -16,6 +26,8 @@ export function OrdersManager() {
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     loadOrders()
@@ -49,6 +61,21 @@ export function OrdersManager() {
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedOrder(null)
+  }
+
+  const handleDeleteOrder = async () => {
+    if (!orderToDelete) return
+    
+    setIsDeleting(true)
+    try {
+      await deleteOrder(orderToDelete)
+      await loadOrders()
+      setOrderToDelete(null)
+    } catch (error) {
+      console.error("Erro ao excluir pedido:", error)
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -149,14 +176,24 @@ export function OrdersManager() {
                     </SelectContent>
                   </Select>
 
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleViewDetails(order)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Ver Detalhes
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewDetails(order)}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Ver Detalhes
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      onClick={() => setOrderToDelete(order.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Excluir
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -176,6 +213,27 @@ export function OrdersManager() {
         onClose={handleCloseModal}
         onStatusChange={handleStatusChange}
       />
+
+      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este pedido? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteOrder}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Excluindo..." : "Excluir Pedido"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
