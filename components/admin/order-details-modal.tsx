@@ -1,14 +1,14 @@
-
 "use client"
 
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Package, User, MapPin, CreditCard, Calendar, Phone, Mail } from "lucide-react"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { CheckCircle, XCircle, Clock, Package, User, MapPin, CreditCard, Calendar, Phone, Mail } from "lucide-react"
 import type { Order } from "@/lib/types"
 
 interface OrderDetailsModalProps {
@@ -54,6 +54,51 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
       whatsapp: "WhatsApp"
     }
     return methods[method as keyof typeof methods] || "Não informado"
+  }
+
+  // Placeholder function - Replace with actual logic to get documents for an item
+  const getDocumentsForCartItem = (item: any) => {
+    // Example: Based on item title or ID, return a list of required document names
+    if (item.title?.includes("Autorização de Representante")) {
+      return [
+        "RG e CPF do representante",
+        "RG e CPF do representado",
+        "Comprovante de endereço de ambos",
+        "Procuração específica",
+        "Objeto específico da representação",
+        "Declaração de capacidade civil",
+        "Reconhecimento de firma",
+        "Substabelecimento (se aplicável)"
+      ]
+    }
+    // Add more conditions for other item types if needed
+    return []
+  }
+
+  // Placeholder function - Replace with actual logic to get document status for an item
+  const getDocumentStatus = (item: any, documentName: string) => {
+    // Example: Check if the document is uploaded for this item.
+    // In a real app, this data would come from the order or item details.
+    // For demonstration, we'll simulate some status.
+    const mockStatus = {
+      "RG e CPF do representante": { uploaded: true, url: "http://example.com/doc1.pdf" },
+      "RG e CPF do representado": { uploaded: true, url: "http://example.com/doc2.pdf" },
+      "Comprovante de endereço de ambos": { uploaded: false },
+      "Procuração específica": { uploaded: true, url: "http://example.com/doc4.pdf" },
+      "Objeto específico da representação": { uploaded: false },
+      "Declaração de capacidade civil": { uploaded: false },
+      "Reconhecimento de firma": { uploaded: false },
+      "Substabelecimento (se aplicável)": { uploaded: false },
+    }
+    
+    const status = mockStatus[documentName as keyof typeof mockStatus] || { uploaded: false }
+
+    // Simulate a URL for uploaded documents for demo purposes
+    if (status.uploaded && !status.url) {
+      status.url = `http://example.com/sample-doc-${documentName.replace(/\s+/g, '-').toLowerCase()}.pdf`
+    }
+
+    return status
   }
 
   return (
@@ -164,26 +209,75 @@ export function OrderDetailsModal({ order, isOpen, onClose, onStatusChange }: Or
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {order.items.map((item, index) => (
-                  <div key={index} className="flex items-center gap-4 p-3 border rounded-lg">
-                    <div className="w-16 h-16 bg-muted rounded-md flex items-center justify-center">
-                      <Package className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium">{item.title || item.name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Quantidade: {item.quantity}x
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Preço unitário: R$ {(item.price || 0).toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">R$ {((item.price || 0) * (item.quantity || 1)).toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
+              <Separator />
+
+              <div>
+                <h3 className="font-semibold mb-3">Itens do Pedido:</h3>
+                <Accordion type="single" collapsible className="w-full space-y-2">
+                  {order.items.map((item, index) => {
+                    const requiredDocuments = getDocumentsForCartItem(item)
+
+                    return (
+                      <AccordionItem key={index} value={`item-${index}`} className="border rounded-lg px-4">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex justify-between items-center w-full pr-4">
+                            <div className="text-left">
+                              <p className="font-medium">{item.title || item.name || 'Item sem nome'}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Quantidade: {item.quantity || 1} | Valor: R$ {((item.price || 0) * (item.quantity || 1)).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          {requiredDocuments.length > 0 ? (
+                            <div className="pt-2 pb-4">
+                              <h4 className="font-medium mb-3 text-sm">Documentos Necessários:</h4>
+                              <div className="space-y-2">
+                                {requiredDocuments.map((documentName: string, docIndex: number) => {
+                                  const docStatus = getDocumentStatus(item, documentName)
+
+                                  return (
+                                    <div key={docIndex} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                                      <span className="text-sm">{documentName}</span>
+                                      <div className="flex items-center gap-2">
+                                        {docStatus.uploaded ? (
+                                          <>
+                                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                                              <CheckCircle className="w-3 h-3 mr-1" />
+                                              Enviado
+                                            </Badge>
+                                            {docStatus.url && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => window.open(docStatus.url, '_blank')}
+                                                className="h-7 text-xs"
+                                              >
+                                                Ver arquivo
+                                              </Button>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
+                                            <Clock className="w-3 h-3 mr-1" />
+                                            Pendente
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground py-2">Nenhum documento necessário para este item.</p>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    )
+                  })}
+                </Accordion>
               </div>
             </CardContent>
           </Card>
